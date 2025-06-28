@@ -173,7 +173,7 @@ impl<'a> StructClassImportCtx<'a> {
                 Some(format!("../../{}/{}/structs", strct_pkg_name, module_name))
             } else if self.is_top_level {
                 // For now, assume source is available
-                let dep_dir = "source";
+                let dep_dir = "onchain";
 
                 Some(format!(
                     "../../_dependencies/{}/{}/{}/structs",
