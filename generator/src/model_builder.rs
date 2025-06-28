@@ -5,7 +5,6 @@ use codespan_reporting::term::termcolor::{ColorChoice, StandardStream};
 use colored::*;
 use core::fmt;
 use futures::future;
-use move_binary_format::file_format::CompiledModule;
 use move_compiler::editions as ME;
 use move_core_types::account_address::AccountAddress;
 use move_model_2::source_model::Model;
@@ -13,6 +12,7 @@ use move_package::compilation::model_builder;
 use move_package::resolution::resolution_graph::ResolvedGraph;
 use move_package::source_package::parsed_manifest as PM;
 use move_package::BuildConfig as MoveBuildConfig;
+use move_binary_format::file_format::CompiledModule;
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -24,6 +24,46 @@ use iota_sdk::types::move_package::UpgradeInfo;
 use tempfile::tempdir;
 
 const STUB_PACKAGE_NAME: &str = "IotaClientGenRootPackageStub";
+
+/// Generate a minimal Move source file from a compiled module
+/// This creates native function declarations that match the module's interface
+fn generate_source_stub(module: &CompiledModule) -> String {
+    use move_binary_format::file_format::Visibility;
+    
+    let mut source = String::new();
+    
+    // Module header  
+    let module_id = module.self_id();
+    let addr = module_id.address();
+    let name = module_id.name();
+    // Ensure address has 0x prefix
+    let addr_str = if addr.to_string().starts_with("0x") {
+        addr.to_string()
+    } else {
+        format!("0x{}", addr)
+    };
+    source.push_str(&format!("module {}::{} {{\n", addr_str, name));
+    
+    // For now, just create a simple module with native functions
+    // We'll skip struct declarations as they're complex to reconstruct
+    
+    // Add native function declarations for all public functions
+    for func_def in module.function_defs() {
+        match &func_def.visibility {
+            Visibility::Public | Visibility::Friend => {
+                let func_handle = module.function_handle_at(func_def.function);
+                let name = module.identifier_at(func_handle.name);
+                
+                // Create a native function declaration
+                source.push_str(&format!("    native public fun {}();\n", name));
+            }
+            _ => {}
+        }
+    }
+    
+    source.push_str("}\n");
+    source
+}
 
 /// Wrapper struct to display a package as an inline table in the stub Move.toml.
 /// This is necessary becase the `toml` crate does not currently support serializing
@@ -180,7 +220,13 @@ async fn build_on_chain_model<Progress: Write>(
         "BUILDING ON-CHAIN MODEL".green().bold()
     )?;
 
-    let (pkg_ids, original_map) =
+    // Create a temporary directory with stub package that depends on on-chain packages
+    let temp_dir = tempdir()?;
+    let stub_path = temp_dir.path();
+    fs::create_dir(stub_path.join("sources"))?;
+
+    // Fetch on-chain packages and create local directories for them
+    let (pkg_ids, _original_map) =
         resolve_on_chain_packages(cache, pkgs.iter().map(|(_, pkg)| pkg.id).collect()).await?;
 
     writeln!(
@@ -188,62 +234,200 @@ async fn build_on_chain_model<Progress: Write>(
         "{}",
         "FETCHING ON-CHAIN PACKAGES".green().bold()
     )?;
-    let mut modules = vec![];
-    let raw_pkgs = cache.get_multi(pkg_ids).await?;
-    for pkg in raw_pkgs {
-        let pkg = pkg?;
-        let IotaRawMovePackage { module_map, .. } = pkg;
-        for (_, bytes) in module_map {
-            let module = CompiledModule::deserialize_with_defaults(&bytes)?;
-            modules.push(module)
+    
+    // Create dependency packages
+    let deps_dir = stub_path.join("deps");
+    fs::create_dir(&deps_dir)?;
+    
+    // Fetch the actual modules from chain
+    let raw_pkgs = cache.get_multi(pkg_ids.clone()).await?;
+    let mut pkg_modules: BTreeMap<AccountAddress, Vec<(String, Vec<u8>)>> = BTreeMap::new();
+    let mut all_dependencies: HashSet<AccountAddress> = HashSet::new();
+    
+    for (idx, pkg_result) in raw_pkgs.into_iter().enumerate() {
+        let pkg = pkg_result?;
+        let IotaRawMovePackage { module_map, linkage_table, .. } = pkg;
+        let modules: Vec<(String, Vec<u8>)> = module_map.into_iter().collect();
+        pkg_modules.insert(pkg_ids[idx], modules);
+        
+        // Collect dependencies from linkage table
+        for (dep_id, _) in linkage_table {
+            all_dependencies.insert(dep_id.into());
+        }
+    }
+    
+    // Fetch dependency packages
+    let dep_ids: Vec<AccountAddress> = all_dependencies.into_iter().collect();
+    if !dep_ids.is_empty() {
+        writeln!(
+            progress_output,
+            "Fetching {} dependency packages",
+            dep_ids.len()
+        )?;
+        let dep_raw_pkgs = cache.get_multi(dep_ids.clone()).await?;
+        for (idx, pkg_result) in dep_raw_pkgs.into_iter().enumerate() {
+            let pkg = pkg_result?;
+            let IotaRawMovePackage { module_map, .. } = pkg;
+            let modules: Vec<(String, Vec<u8>)> = module_map.into_iter().collect();
+            pkg_modules.insert(dep_ids[idx], modules);
+        }
+    }
+    
+    // Create directories for all packages (both main packages and their dependencies)
+    for (addr, modules) in pkg_modules.iter() {
+        // Determine package name
+        let pkg_name = if *addr == AccountAddress::from_hex_literal("0x1").unwrap() {
+            "MoveStdlib"
+        } else if *addr == AccountAddress::from_hex_literal("0x2").unwrap() {
+            "Iota"
+        } else {
+            // Find name from pkgs
+            pkgs.iter()
+                .find(|(_, pkg)| pkg.id == *addr)
+                .map(|(name, _)| name.as_str())
+                .unwrap_or("Unknown")
+        };
+        
+        let pkg_dir = deps_dir.join(pkg_name);
+        fs::create_dir(&pkg_dir)?;
+        let sources_dir = pkg_dir.join("sources");
+        fs::create_dir(&sources_dir)?;
+        
+        // Generate source stubs for each module
+        for (module_name, bytecode) in modules {
+            // Deserialize the module
+            let module = CompiledModule::deserialize_with_defaults(bytecode)?;
+            
+            // Generate source stub
+            let source_stub = generate_source_stub(&module);
+            
+            // Write source file
+            let source_path = sources_dir.join(format!("{}.move", module_name));
+            std::fs::write(&source_path, source_stub)?;
+            
+            writeln!(
+                progress_output,
+                "Generated source stub for {} at {:?}",
+                module_name,
+                source_path
+            )?;
+        }
+        
+        // Create a minimal Move.toml for the dependency
+        let mut dep_manifest = File::create(pkg_dir.join("Move.toml"))?;
+        writeln!(dep_manifest, "[package]")?;
+        writeln!(dep_manifest, "name = \"{}\"", pkg_name)?;
+        writeln!(dep_manifest, "version = \"0.1.0\"")?;
+        writeln!(dep_manifest, "published-at = \"{}\"", addr.to_hex_literal())?;
+        
+        // Add addresses section for framework packages
+        if *addr == AccountAddress::from_hex_literal("0x1").unwrap() || 
+           *addr == AccountAddress::from_hex_literal("0x2").unwrap() {
+            writeln!(dep_manifest, "\n[addresses]")?;
+            writeln!(dep_manifest, "{} = \"{}\"", pkg_name, addr.to_hex_literal())?;
         }
     }
 
-    let mut on_chain_id_map: BTreeMap<AccountAddress, PM::PackageName> = BTreeMap::new();
-    let mut on_chain_published_at: BTreeMap<AccountAddress, AccountAddress> = BTreeMap::new();
-    for (name, pkg) in pkgs {
-        let original_id = original_map.get(&pkg.id).unwrap();
+    let mut stub_manifest = File::create(stub_path.join("Move.toml"))?;
 
-        on_chain_id_map.insert(*original_id, name);
-        on_chain_published_at.insert(*original_id, pkg.id);
-    }
-
-    // For on-chain modules, we need to use a different approach
-    // The model_builder::build function expects a ResolvedGraph from source packages
-    // For compiled modules, we should use the Model's bytecode loading capabilities
-    
-    // Create a temporary directory structure to load compiled modules
-    let temp_dir = tempdir()?;
-    let modules_path = temp_dir.path().join("modules");
-    fs::create_dir(&modules_path)?;
-    
-    // Write compiled modules to temporary files
-    for (idx, module) in modules.iter().enumerate() {
-        let mut module_bytes = Vec::new();
-        module.serialize_with_version(module.version, &mut module_bytes)?;
-        let module_file = modules_path.join(format!("module_{}.mv", idx));
-        fs::write(&module_file, module_bytes)?;
-    }
-    
-    // Create a minimal package structure for loading
-    let mut stub_manifest = File::create(temp_dir.path().join("Move.toml"))?;
     writeln!(stub_manifest, "[package]")?;
-    writeln!(stub_manifest, "name = \"OnChainPackages\"")?;
+    writeln!(stub_manifest, "name = \"{}\"", STUB_PACKAGE_NAME)?;
     writeln!(stub_manifest, "version = \"0.1.0\"")?;
+
+    writeln!(stub_manifest, "\n[dependencies]")?;
     
-    // Build configuration for loading compiled modules
+    // Create local dependencies for all packages
+    for (addr, _) in pkg_modules.iter() {
+        let pkg_name = if *addr == AccountAddress::from_hex_literal("0x1").unwrap() {
+            "MoveStdlib"
+        } else if *addr == AccountAddress::from_hex_literal("0x2").unwrap() {
+            "Iota"
+        } else {
+            pkgs.iter()
+                .find(|(_, pkg)| pkg.id == *addr)
+                .map(|(name, _)| name.as_str())
+                .unwrap_or("Unknown")
+        };
+        
+        writeln!(stub_manifest, "{} = {{ local = \"./deps/{}\" }}", 
+            pkg_name, 
+            pkg_name
+        )?;
+    }
+
+    // Write addresses section to map package names to addresses
+    writeln!(stub_manifest, "\n[addresses]")?;
+    for (addr, _) in pkg_modules.iter() {
+        let pkg_name = if *addr == AccountAddress::from_hex_literal("0x1").unwrap() {
+            "MoveStdlib"
+        } else if *addr == AccountAddress::from_hex_literal("0x2").unwrap() {
+            "Iota"
+        } else {
+            pkgs.iter()
+                .find(|(_, pkg)| pkg.id == *addr)
+                .map(|(name, _)| name.as_str())
+                .unwrap_or("Unknown")
+        };
+        
+        writeln!(stub_manifest, "{} = \"{}\"", pkg_name, addr.to_hex_literal())?;
+    }
+
     let build_config = MoveBuildConfig {
         skip_fetch_latest_git_deps: true,
         default_flavor: Some(ME::Flavor::Iota),
         ..Default::default()
     };
     
-    // Create a resolved graph from the temporary package
-    let resolved_graph = build_config.resolution_graph_for_package(temp_dir.path(), None, &mut io::stderr())?;
+    let resolved_graph =
+        build_config.resolution_graph_for_package(stub_path, None, &mut io::stderr())?;
+
+    // Build the id map from our original packages
+    let mut on_chain_id_map: BTreeMap<AccountAddress, PM::PackageName> = BTreeMap::new();
+    let mut on_chain_published_at: BTreeMap<AccountAddress, AccountAddress> = BTreeMap::new();
     
-    // Build the model using the standard model_builder
+    // First, add the packages from gen.toml
+    for (name, pkg) in pkgs {
+        on_chain_id_map.insert(pkg.id, name);
+        on_chain_published_at.insert(pkg.id, pkg.id);
+    }
+    
+    writeln!(
+        progress_output,
+        "Building model with {} top-level packages",
+        on_chain_id_map.len()
+    )?;
+    for (addr, name) in on_chain_id_map.iter() {
+        writeln!(
+            progress_output,
+            "  - {}: {}",
+            name,
+            addr.to_hex_literal()
+        )?;
+    }
+
     let mut stderr = StandardStream::stderr(ColorChoice::Always);
     let env = model_builder::build(resolved_graph, &mut stderr)?;
+
+    writeln!(
+        progress_output,
+        "Model contains {} packages",
+        env.packages().count()
+    )?;
+    for pkg in env.packages() {
+        writeln!(
+            progress_output,
+            "  Package: {:?} at {}",
+            pkg.name(),
+            pkg.address().to_hex_literal()
+        )?;
+        for module in pkg.modules() {
+            writeln!(
+                progress_output,
+                "    Module: {}",
+                module.name()
+            )?;
+        }
+    }
 
     // resolve type origins
     let type_origin_table = resolve_type_origin_table(

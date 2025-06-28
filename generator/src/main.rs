@@ -174,6 +174,16 @@ async fn main() -> Result<()> {
             "{}",
             "GENERATING ON-CHAIN PACKAGES".green().bold()
         )?;
+        writeln!(
+            progress_output,
+            "Found {} on-chain packages to generate",
+            on_chain_pkgs.len()
+        )?;
+        writeln!(
+            progress_output,
+            "Top-level packages: {:?}",
+            on_chain_top_level_addr_map
+        )?;
         gen_packages_for_model(
             on_chain_pkgs,
             &on_chain_top_level_addr_map,
