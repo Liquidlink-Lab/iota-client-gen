@@ -1,10 +1,10 @@
 #[test_only]
 module amm::pool_tests {
-    use sui::test_scenario::{Self, Scenario};
-    use sui::tx_context::{Self, TxContext};
-    use sui::balance::{Self, Balance};
-    use sui::transfer;
-    use sui::coin::{Self, Coin};
+    use iota::test_scenario::{Self, Scenario};
+    use iota::tx_context::{Self, TxContext};
+    use iota::balance::{Self, Balance};
+    use iota::transfer;
+    use iota::coin::{Self, Coin};
     use amm::pool::{Self, Pool, PoolRegistry, AdminCap, LP};
 
     const ADMIN: address = @0xABBA;

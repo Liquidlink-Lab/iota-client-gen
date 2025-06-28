@@ -145,13 +145,13 @@ mod tests {
     fn test_parse_gen_manifest() {
         let manifest_str = r#"
         [config]
-        rpc = "https://fullnode.mainnet.sui.io:443"
+        rpc = "https://fullnode.mainnet.iota.io:443"
 
         [packages]
         deepbook = { id = "0xdee9" }
         amm = { local = "../move/amm" }
         fixture = { local = "../move/fixture" }
-        framework = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "releases/sui-v1.0.0-release" }
+        framework = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-framework", rev = "releases/iota-v1.0.0-release" }
         "#;
 
         let act =
@@ -159,7 +159,7 @@ mod tests {
 
         let exp = GenManifest {
             config: Some(Config {
-                rpc: Some("https://fullnode.mainnet.sui.io:443".to_string()),
+                rpc: Some("https://fullnode.mainnet.iota.io:443".to_string()),
             }),
             packages: vec![
                 (
@@ -190,9 +190,9 @@ mod tests {
                     "framework".into(),
                     Package::Dependency(PM::Dependency::Internal(PM::InternalDependency {
                         kind: PM::DependencyKind::Git(PM::GitInfo {
-                            git_url: "https://github.com/MystenLabs/sui.git".into(),
-                            git_rev: "releases/sui-v1.0.0-release".into(),
-                            subdir: "crates/sui-framework/packages/sui-framework".into(),
+                            git_url: "https://github.com/iotaledger/iota.git".into(),
+                            git_rev: "releases/iota-v1.0.0-release".into(),
+                            subdir: "crates/iota-framework/packages/iota-framework".into(),
                         }),
                         subst: None,
                         digest: None,

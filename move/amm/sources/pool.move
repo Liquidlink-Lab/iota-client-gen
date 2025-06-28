@@ -1,14 +1,14 @@
 module amm::pool {
     use std::type_name::{Self, TypeName};
     use std::vector;
-    use sui::object::{Self, UID, ID};
-    use sui::balance::{Self, Balance, Supply};
-    use sui::balance::{create_supply};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-    use sui::event;
-    use sui::math;
-    use sui::table::{Self, Table};
+    use iota::object::{Self, UID, ID};
+    use iota::balance::{Self, Balance, Supply};
+    use iota::balance::{create_supply};
+    use iota::tx_context::{Self, TxContext};
+    use iota::transfer;
+    use iota::event;
+    use iota::math;
+    use iota::table::{Self, Table};
 
     /* ================= errors ================= */
 

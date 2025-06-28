@@ -1,8 +1,8 @@
 module amm::util {
-    use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
+    use iota::balance::{Self, Balance};
+    use iota::coin::{Self, Coin};
+    use iota::tx_context::{Self, TxContext};
+    use iota::transfer;
     use amm::pool::{Self, PoolRegistry, LP, Pool, AdminCap};
 
     /// Destroys the provided balance if zero, otherwise converts it to a `Coin`

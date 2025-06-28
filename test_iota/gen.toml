@@ -1,0 +1,17 @@
+[config]
+# IOTA mainnet RPC endpoint
+rpc = "https://api.mainnet.iota.cafe"
+
+[packages]
+# Your on-chain package - replace "MyPackage" with a descriptive name
+MyPackage = { id = "0x661937ee7f999fc4040464bd3de66ba413c2644d3970b7027dece7773f2663bf" }
+
+# Optional: Add IOTA framework if you need to reference IOTA types
+# Iota = { id = "0x2" }
+
+# Optional: Add Move stdlib if needed
+# MoveStdlib = { id = "0x1" }
+
+# You can also add source packages from git or local paths:
+# LocalPackage = { local = "../path/to/move/package" }
+# GitPackage = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/iota-framework", rev = "develop" }

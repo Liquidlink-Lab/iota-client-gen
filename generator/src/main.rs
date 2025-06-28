@@ -7,30 +7,30 @@ use colored::*;
 use genco::fmt;
 use genco::prelude::*;
 use move_core_types::account_address::AccountAddress;
-use move_model_2::{compiled_model, model, source_model};
+use move_model_2::source_model;
 use move_package::source_package::parsed_manifest::PackageName;
 use move_symbol_pool::Symbol;
 use std::io::Write;
-use sui_client_gen::framework_sources;
-use sui_client_gen::gen::{
+use iota_client_gen::framework_sources;
+use iota_client_gen::gen::{
     gen_init_loader_ts, gen_package_init_ts, module_import_name, package_import_name,
 };
-use sui_client_gen::gen::{FrameworkImportCtx, FunctionsGen, StructClassImportCtx, StructsGen};
-use sui_client_gen::manifest::{parse_gen_manifest_from_file, GenManifest, Package};
-use sui_client_gen::model_builder::{
+use iota_client_gen::gen::{FrameworkImportCtx, FunctionsGen, StructClassImportCtx, StructsGen};
+use iota_client_gen::manifest::{parse_gen_manifest_from_file, GenManifest, Package};
+use iota_client_gen::model_builder::{
     build_models, OnChainModelResult, SourceModelResult, TypeOriginTable, VersionTable,
 };
-use sui_client_gen::package_cache::PackageCache;
-use sui_move_build::SuiPackageHooks;
-use sui_sdk::SuiClientBuilder;
+use iota_client_gen::package_cache::PackageCache;
+use iota_move_build::IotaPackageHooks;
+use iota_sdk::IotaClientBuilder;
 
-const DEFAULT_RPC: &str = "https://fullnode.mainnet.sui.io:443";
+const DEFAULT_RPC: &str = "https://api.mainnet.iota.cafe";
 
 #[derive(Parser)]
 #[clap(
-    name = "sui-client-gen",
+    name = "iota-client-gen",
     version,
-    about = "Generate TS SDKs for Sui Move smart contracts."
+    about = "Generate TS SDKs for IOTA Move smart contracts."
 )]
 struct Args {
     #[arg(
@@ -60,7 +60,7 @@ struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    move_package::package_hooks::register_package_hooks(Box::new(SuiPackageHooks));
+    move_package::package_hooks::register_package_hooks(Box::new(IotaPackageHooks));
 
     let manifest = parse_gen_manifest_from_file(Path::new(&args.manifest))?;
     let rpc_url = match &manifest.config {
@@ -70,7 +70,7 @@ async fn main() -> Result<()> {
             .unwrap_or_else(|| DEFAULT_RPC.to_string()),
         None => DEFAULT_RPC.to_string(),
     };
-    let rpc_client = SuiClientBuilder::default().build(rpc_url).await?;
+    let rpc_client = IotaClientBuilder::default().build(rpc_url).await?;
 
     let mut progress_output = std::io::stderr();
 
@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
         .map(|m| m.env.packages().map(|pkg| (pkg.address(), pkg)).collect())
         .unwrap_or_default();
 
-    let on_chain_pkgs: BTreeMap<AccountAddress, compiled_model::Package> = on_chain_model
+    let on_chain_pkgs: BTreeMap<AccountAddress, source_model::Package> = on_chain_model
         .as_ref()
         .map(|m| m.env.packages().map(|pkg| (pkg.address(), pkg)).collect())
         .unwrap_or_default();
@@ -296,8 +296,8 @@ fn resolve_top_level_pkg_addr_map(
     (source_top_level_id_map, on_chain_top_level_id_map)
 }
 
-fn gen_packages_for_model<const HAS_SOURCE: usize>(
-    pkgs: BTreeMap<AccountAddress, model::Package<HAS_SOURCE>>,
+fn gen_packages_for_model(
+    pkgs: BTreeMap<AccountAddress, source_model::Package>,
     top_level_pkg_names: &BTreeMap<AccountAddress, Symbol>,
     published_at_map: &BTreeMap<AccountAddress, AccountAddress>,
     type_origin_table: &TypeOriginTable,

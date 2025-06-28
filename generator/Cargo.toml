@@ -1,5 +1,5 @@
 [package]
-name = "sui-client-gen"
+name = "iota-client-gen"
 version = "0.3.2"
 edition = "2021"
 
@@ -16,15 +16,15 @@ codespan-reporting = "0.11.1"
 convert_case = "^0.6.0"
 colored = "2.0.0"
 
-sui-move-build = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-sui-move = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-sui-sdk = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-sui-json-rpc-types = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-model-2 = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-core-types = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-binary-format = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-symbol-pool = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-bytecode-utils = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-compiler = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-package = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
-move-command-line-common = { git = "https://github.com/MystenLabs/sui/", rev = "mainnet-v1.46.3"}
+iota-move-build = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+iota-move = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+iota-sdk = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+iota-json-rpc-types = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-model-2 = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-core-types = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-binary-format = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-symbol-pool = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-bytecode-utils = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-compiler = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-package = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}
+move-command-line-common = { git = "https://github.com/iotaledger/iota.git", rev = "6e241550c4356338a9dbb3b493a92ebc365f7fd5"}

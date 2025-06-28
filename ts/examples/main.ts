@@ -1,7 +1,7 @@
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
-import { fromB64, normalizeSuiAddress } from '@mysten/sui/utils'
-import { SuiClient } from '@mysten/sui/client'
-import { Transaction } from '@mysten/sui/transactions'
+import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519'
+import { fromB64, normalizeIotaAddress } from '@iota/iota-sdk/utils'
+import { IotaClient } from '@iota/iota-sdk/client'
+import { Transaction } from '@iota/iota-sdk/transactions'
 import { createPoolWithCoins } from './gen/amm/util/functions'
 import { PACKAGE_ID as EXAMPLES_PACKAGE_ID } from './gen/examples'
 import { faucetMint } from './gen/examples/example-coin/functions'
@@ -9,12 +9,12 @@ import { Command } from 'commander'
 import { Pool, PoolCreationEvent, PoolRegistry, PoolRegistryItem } from './gen/amm/pool/structs'
 import { createWithGenericField } from './gen/examples/fixture/functions'
 import { WithGenericField } from './gen/examples/fixture/structs'
-import { Field } from './gen/sui/dynamic-field/structs'
+import { Field } from './gen/iota/dynamic-field/structs'
 import { EXAMPLE_COIN } from './gen/examples/example-coin/structs'
 import { createExampleStruct, specialTypes } from './gen/examples/examples/functions'
-import { bcs } from '@mysten/sui/bcs'
+import { bcs } from '@iota/iota-sdk/bcs'
 import { ExampleStruct } from './gen/examples/examples/structs'
-import { SUI } from './gen/sui/sui/structs'
+import { IOTA } from './gen/iota/iota/structs'
 import { vector } from './gen/_framework/reified'
 
 const EXAMPLE_COIN_FAUCET_ID = '0x23a00d64a785280a794d0bdd2f641dfabf117c78e07cb682550ed3c2b41dd760'
@@ -28,8 +28,8 @@ const keypair = Ed25519Keypair.fromSecretKey(
   fromB64('AMVT58FaLF2tJtg/g8X2z1/vG0FvNn0jvRu9X2Wl8F+u').slice(1)
 ) // address: 0x8becfafb14c111fc08adee6cc9afa95a863d1bf133f796626eec353f98ea8507
 
-const client = new SuiClient({
-  url: 'https://fullnode.testnet.sui.io:443/',
+const client = new IotaClient({
+  url: 'https://api.testnet.iota.cafe',
 })
 
 /**
@@ -37,15 +37,15 @@ const client = new SuiClient({
  * Create a new AMM pool. Will not work if the pool already exists.
  */
 async function createPool() {
-  const address = keypair.getPublicKey().toSuiAddress()
+  const address = keypair.getPublicKey().toIotaAddress()
 
   const tx = new Transaction()
 
-  const [suiCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(1_000_000)])
+  const [iotaCoin] = tx.splitCoins(tx.gas, [tx.pure.u64(1_000_000)])
   const exampleCoin = faucetMint(tx, EXAMPLE_COIN_FAUCET_ID)
-  const lp = createPoolWithCoins(tx, ['0x2::sui::SUI', EXAMPLE_COIN.$typeName], {
+  const lp = createPoolWithCoins(tx, ['0x2::iota::IOTA', EXAMPLE_COIN.$typeName], {
     registry: AMM_POOL_REGISTRY_ID,
-    initA: suiCoin,
+    initA: iotaCoin,
     initB: exampleCoin,
     lpFeeBps: 30n,
     adminFeePct: 10n,
@@ -61,7 +61,7 @@ async function createPool() {
 
 /** An example for object fetching. Fetch and print the AMM pool at AMM_POOL_ID. */
 async function fetchPool() {
-  const pool = await Pool.r(SUI.p, EXAMPLE_COIN.p).fetch(client, AMM_POOL_ID)
+  const pool = await Pool.r(IOTA.p, EXAMPLE_COIN.p).fetch(client, AMM_POOL_ID)
   console.log(pool)
 }
 
@@ -154,8 +154,8 @@ async function createSpecialTypes() {
       elements: [createExampleStruct(tx), createExampleStruct(tx)],
       type: ExampleStruct.$typeName,
     }),
-    idField: tx.pure.address(normalizeSuiAddress('0x12345')),
-    address: tx.pure.address(normalizeSuiAddress('0x12345')),
+    idField: tx.pure.address(normalizeIotaAddress('0x12345')),
+    address: tx.pure.address(normalizeIotaAddress('0x12345')),
     optionSome: tx.pure(bcs.vector(bcs.u64()).serialize([5n])),
     optionNone: tx.pure(bcs.vector(bcs.u64()).serialize([])),
   })

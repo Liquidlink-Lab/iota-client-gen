@@ -2,9 +2,9 @@ module examples::examples {
     use std::ascii;
     use std::string;
     use std::option::Option;
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
+    use iota::object::{Self, ID, UID};
+    use iota::tx_context::TxContext;
+    use iota::transfer;
 
     public struct ExampleStruct has drop, store { }
 

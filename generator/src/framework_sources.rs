@@ -8,7 +8,7 @@ pub static ESLINTRC: &str = r#"{
 "#;
 
 pub static LOADER: &str = r#"
-import { compressSuiType, parseTypeName } from './util'
+import { compressIotaType, parseTypeName } from './util'
 import {
   PhantomReified,
   PhantomTypeArgument,
@@ -50,7 +50,7 @@ export class StructClassLoader {
   reified(
     type: string
   ): StructClassReified<StructClass, any> | VectorClassReified<VectorClass, any> | string {
-    const { typeName, typeArgs } = parseTypeName(compressSuiType(type))
+    const { typeName, typeArgs } = parseTypeName(compressIotaType(type))
     switch (typeName) {
       case 'bool':
       case 'u8':
@@ -100,13 +100,13 @@ registerClasses(loader)
 "#;
 
 pub static UTIL: &str = r#"
-import { bcs, BcsType } from '@mysten/sui/bcs'
+import { bcs, BcsType } from '@iota/iota-sdk/bcs'
 import {
   Transaction,
   TransactionArgument,
   TransactionObjectArgument,
   TransactionObjectInput,
-} from '@mysten/sui/transactions'
+} from '@iota/iota-sdk/transactions'
 
 export interface FieldsWithTypes {
   fields: Record<string, any>
@@ -446,7 +446,7 @@ export function typeArgIsPure(type: string): boolean {
   }
 }
 
-export function compressSuiAddress(addr: string): string {
+export function compressIotaAddress(addr: string): string {
   // remove leading zeros
   const stripped = addr.split('0x').join('')
   for (let i = 0; i < stripped.length; i++) {
@@ -459,7 +459,7 @@ export function compressSuiAddress(addr: string): string {
 
 // Recursively removes leading zeros from a type.
 // e.g. `0x00000002::module::Name<0x00001::a::C>` -> `0x2::module::Name<0x1::a::C>`
-export function compressSuiType(type: string): string {
+export function compressIotaType(type: string): string {
   const { typeName, typeArgs } = parseTypeName(type)
   switch (typeName) {
     case 'bool':
@@ -473,13 +473,13 @@ export function compressSuiType(type: string): string {
     case 'signer':
       return typeName
     case 'vector':
-      return `vector<${compressSuiType(typeArgs[0])}>`
+      return `vector<${compressIotaType(typeArgs[0])}>`
     default: {
       const tok = typeName.split('::')
-      tok[0] = compressSuiAddress(tok[0])
+      tok[0] = compressIotaAddress(tok[0])
       const compressedName = tok.join('::')
       if (typeArgs.length > 0) {
-        return `${compressedName}<${typeArgs.map(typeArg => compressSuiType(typeArg)).join(',')}>`
+        return `${compressedName}<${typeArgs.map(typeArg => compressIotaType(typeArg)).join(',')}>`
       } else {
         return compressedName
       }
@@ -487,7 +487,7 @@ export function compressSuiType(type: string): string {
   }
 }
 
-export function composeSuiType(typeName: string, ...typeArgs: string[]): string {
+export function composeIotaType(typeName: string, ...typeArgs: string[]): string {
   if (typeArgs.length > 0) {
     return `${typeName}<${typeArgs.join(', ')}>`
   } else {
@@ -498,10 +498,10 @@ export function composeSuiType(typeName: string, ...typeArgs: string[]): string 
 "#;
 
 pub static REIFIED: &str = r#"
-import { bcs, BcsType } from '@mysten/sui/bcs'
-import { fromHEX, toHEX } from '@mysten/sui/utils'
-import { FieldsWithTypes, compressSuiType, parseTypeName } from './util'
-import { SuiClient, SuiParsedData, SuiObjectData } from '@mysten/sui/client'
+import { bcs, BcsType } from '@iota/iota-sdk/bcs'
+import { fromHEX, toHEX } from '@iota/iota-sdk/utils'
+import { FieldsWithTypes, compressIotaType, parseTypeName } from './util'
+import { IotaClient, IotaParsedData, IotaObjectData } from '@iota/iota-sdk/client'
 
 // for backwards compatibility
 export { vector } from './vector'
@@ -535,8 +535,8 @@ export type TypeArgument = StructClass | Primitive | VectorClass
 
 export interface StructClassReified<T extends StructClass, Fields> {
   typeName: T['$typeName'] // e.g., '0x2::balance::Balance', without type arguments
-  fullTypeName: ToTypeStr<T> // e.g., '0x2::balance::Balance<0x2::sui:SUI>'
-  typeArgs: T['$typeArgs'] // e.g., ['0x2::sui:SUI']
+  fullTypeName: ToTypeStr<T> // e.g., '0x2::balance::Balance<0x2::iota:IOTA>'
+  typeArgs: T['$typeArgs'] // e.g., ['0x2::iota:IOTA']
   isPhantom: T['$isPhantom'] // e.g., [true, false]
   reifiedTypeArgs: Array<Reified<TypeArgument, any> | PhantomReified<PhantomTypeArgument>>
   bcs: BcsType<any>
@@ -545,9 +545,9 @@ export interface StructClassReified<T extends StructClass, Fields> {
   fromBcs(data: Uint8Array): T
   fromJSONField: (field: any) => T
   fromJSON: (json: Record<string, any>) => T
-  fromSuiParsedData: (content: SuiParsedData) => T
-  fromSuiObjectData: (data: SuiObjectData) => T
-  fetch: (client: SuiClient, id: string) => Promise<T>
+  fromIotaParsedData: (content: IotaParsedData) => T
+  fromIotaObjectData: (data: IotaObjectData) => T
+  fetch: (client: IotaClient, id: string) => Promise<T>
   new: (fields: Fields) => T
   kind: 'StructClassReified'
 }
@@ -848,7 +848,7 @@ export function assertReifiedTypeArgsMatch(
     )
   }
   for (let i = 0; i < typeArgs.length; i++) {
-    if (compressSuiType(typeArgs[i]) !== compressSuiType(extractType(reifiedTypeArgs[i]))) {
+    if (compressIotaType(typeArgs[i]) !== compressIotaType(extractType(reifiedTypeArgs[i]))) {
       throw new Error(
         `provided item has mismatching type argments ${fullType} (expected ${extractType(
           reifiedTypeArgs[i]
@@ -940,7 +940,7 @@ export function decodeFromJSONField(typeArg: Reified<TypeArgument, any>, field: 
 "#;
 
 pub static VECTOR: &str = r#"
-import { bcs } from '@mysten/sui/bcs'
+import { bcs } from '@iota/iota-sdk/bcs'
 import {
   decodeFromFields,
   decodeFromFieldsWithTypes,
@@ -956,7 +956,7 @@ import {
   VectorClassReified,
   fieldToJSON,
 } from './reified'
-import { composeSuiType, FieldsWithTypes } from './util'
+import { composeIotaType, FieldsWithTypes } from './util'
 
 export type VectorElements<T extends TypeArgument> = Array<ToField<T>>
 
@@ -977,7 +977,7 @@ export class Vector<T extends TypeArgument> implements VectorClass {
   readonly elements: Array<ToField<T>>
 
   constructor(typeArgs: [ToTypeStr<T>], elements: VectorElements<T>) {
-    this.$fullTypeName = composeSuiType(this.$typeName, ...typeArgs) as `vector<${ToTypeStr<T>}>`
+    this.$fullTypeName = composeIotaType(this.$typeName, ...typeArgs) as `vector<${ToTypeStr<T>}>`
     this.$typeArgs = typeArgs
 
     this.elements = elements
@@ -986,7 +986,7 @@ export class Vector<T extends TypeArgument> implements VectorClass {
   static reified<T extends Reified<TypeArgument, any>>(T: T): VectorReified<ToTypeArgument<T>> {
     return {
       typeName: Vector.$typeName,
-      fullTypeName: composeSuiType(
+      fullTypeName: composeIotaType(
         Vector.$typeName,
         ...[extractType(T)]
       ) as `vector<${ToTypeStr<ToTypeArgument<T>>}>`,

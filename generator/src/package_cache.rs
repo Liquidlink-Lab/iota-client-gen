@@ -5,13 +5,13 @@ use std::{
 
 use anyhow::{anyhow, Result};
 use move_core_types::account_address::AccountAddress;
-use sui_json_rpc_types::{SuiObjectDataOptions, SuiObjectResponse, SuiRawData, SuiRawMovePackage};
-use sui_sdk::{apis::ReadApi, types::base_types::ObjectID};
+use iota_json_rpc_types::{IotaObjectDataOptions, IotaObjectResponse, IotaRawData, IotaRawMovePackage};
+use iota_sdk::{apis::ReadApi, types::base_types::ObjectID};
 use tokio::sync::RwLock;
 
 pub struct PackageCache<'a> {
     rpc_client: &'a ReadApi,
-    cache: Arc<RwLock<BTreeMap<ObjectID, SuiRawMovePackage>>>,
+    cache: Arc<RwLock<BTreeMap<ObjectID, IotaRawMovePackage>>>,
 }
 
 impl<'a> PackageCache<'a> {
@@ -22,16 +22,16 @@ impl<'a> PackageCache<'a> {
         }
     }
 
-    fn get_package_from_result(&self, obj_read: SuiObjectResponse) -> Result<SuiRawMovePackage> {
+    fn get_package_from_result(&self, obj_read: IotaObjectResponse) -> Result<IotaRawMovePackage> {
         let obj = obj_read
             .into_object()
             .map_err(|e| anyhow!("package object does not exist or was deleted: {}", e))?;
         let object_id = obj.object_id;
         let obj = obj.bcs.ok_or_else(|| anyhow!("bcs field not found"))?;
         match obj {
-            SuiRawData::Package(pkg) => Ok(pkg),
-            SuiRawData::MoveObject(_) => Err(anyhow!(
-                "dependency ID contains a Sui object, not a Move package: {}",
+            IotaRawData::Package(pkg) => Ok(pkg),
+            IotaRawData::MoveObject(_) => Err(anyhow!(
+                "dependency ID contains a IOTA object, not a Move package: {}",
                 object_id
             )),
         }
@@ -40,7 +40,7 @@ impl<'a> PackageCache<'a> {
     pub async fn get_multi(
         &mut self,
         addrs: Vec<AccountAddress>,
-    ) -> Result<Vec<Result<SuiRawMovePackage>>> {
+    ) -> Result<Vec<Result<IotaRawMovePackage>>> {
         let ids = addrs
             .into_iter()
             .map(ObjectID::from_address)
@@ -64,7 +64,7 @@ impl<'a> PackageCache<'a> {
 
         let fetch_res = self
             .rpc_client
-            .multi_get_object_with_options(to_fetch.clone(), SuiObjectDataOptions::new().with_bcs())
+            .multi_get_object_with_options(to_fetch.clone(), IotaObjectDataOptions::new().with_bcs())
             .await?
             .into_iter()
             .map(|obj_read| self.get_package_from_result(obj_read))
@@ -91,7 +91,7 @@ impl<'a> PackageCache<'a> {
         Ok(ret)
     }
 
-    pub async fn get(&mut self, addr: AccountAddress) -> Result<SuiRawMovePackage> {
+    pub async fn get(&mut self, addr: AccountAddress) -> Result<IotaRawMovePackage> {
         self.get_multi(vec![addr]).await?.pop().unwrap()
     }
 }

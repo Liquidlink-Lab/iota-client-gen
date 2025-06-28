@@ -1,7 +1,7 @@
-import { Transaction } from '@mysten/sui/transactions'
-import { SuiClient } from '@mysten/sui/client'
-import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519'
-import { fromB64 } from '@mysten/sui/utils'
+import { Transaction } from '@iota/iota-sdk/transactions'
+import { IotaClient } from '@iota/iota-sdk/client'
+import { Ed25519Keypair } from '@iota/iota-sdk/keypairs/ed25519'
+import { fromB64 } from '@iota/iota-sdk/utils'
 import { it, expect, describe } from 'vitest'
 import {
   Bar,
@@ -26,27 +26,27 @@ import { StructFromOtherModule } from './gen/examples/other-module/structs'
 import { string } from './gen/move-stdlib/ascii/functions'
 import { utf8 } from './gen/move-stdlib/string/functions'
 import { none, some } from './gen/move-stdlib/option/functions'
-import { newUnsafeFromBytes } from './gen/sui/url/functions'
-import { new_ as newUid, idFromAddress } from './gen/sui/object/functions'
-import { zero } from './gen/sui/balance/functions'
-import { Balance } from './gen/sui/balance/structs'
+import { newUnsafeFromBytes } from './gen/iota/url/functions'
+import { new_ as newUid, idFromAddress } from './gen/iota/object/functions'
+import { zero } from './gen/iota/balance/functions'
+import { Balance } from './gen/iota/balance/structs'
 import { extractType, phantom, vector } from './gen/_framework/reified'
-import { SUI } from './gen/sui/sui/structs'
+import { IOTA } from './gen/iota/iota/structs'
 import { Option } from './gen/move-stdlib/option/structs'
 import { String as Utf8String } from './gen/move-stdlib/string/structs'
 import { String as AsciiString } from './gen/move-stdlib/ascii/structs'
-import { Url } from './gen/sui/url/structs'
-import { ID, UID } from './gen/sui/object/structs'
+import { Url } from './gen/iota/url/structs'
+import { ID, UID } from './gen/iota/object/structs'
 import { loader } from './gen/_framework/loader'
 import { PKG_V1 } from './gen/examples'
-import { sqrt } from './gen/sui/math/functions'
+import { sqrt } from './gen/iota/math/functions'
 
 const keypair = Ed25519Keypair.fromSecretKey(
   fromB64('AMVT58FaLF2tJtg/g8X2z1/vG0FvNn0jvRu9X2Wl8F+u').slice(1)
 ) // address: 0x8becfafb14c111fc08adee6cc9afa95a863d1bf133f796626eec353f98ea8507
 
-const client = new SuiClient({
-  url: 'https://fullnode.testnet.sui.io:443/',
+const client = new IotaClient({
+  url: 'https://api.testnet.iota.cafe',
 })
 
 it('creates and decodes an object with object as type param', async () => {
@@ -202,7 +202,7 @@ it('creates and decodes an object with object as type param', async () => {
 
   expect(de).toEqual(exp)
   expect(Foo.fromFieldsWithTypes(Bar.reified(), foo.data.content)).toEqual(exp)
-  expect(Foo.fromSuiParsedData(Bar.reified(), foo.data.content)).toEqual(exp)
+  expect(Foo.fromIotaParsedData(Bar.reified(), foo.data.content)).toEqual(exp)
   expect(await Foo.fetch(client, Bar.reified(), id)).toEqual(exp)
   expect(Foo.fromJSON(Bar.reified(), de.toJSON())).toEqual(exp)
 })
@@ -377,8 +377,8 @@ it('decodes special-cased types correctly', async () => {
 
   const encoder = new TextEncoder()
 
-  const typeArgs = ['0x2::sui::SUI', 'u64'] as [string, string]
-  const reifiedArgs = [SUI.p, 'u64'] as const
+  const typeArgs = ['0x2::iota::IOTA', 'u64'] as [string, string]
+  const reifiedArgs = [IOTA.p, 'u64'] as const
 
   createSpecial(tx, typeArgs, {
     string: utf8(tx, Array.from(encoder.encode('string'))),
@@ -386,11 +386,11 @@ it('decodes special-cased types correctly', async () => {
     url: newUnsafeFromBytes(tx, Array.from(encoder.encode('https://example.com'))),
     idField: idFromAddress(tx, 'faf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5'),
     uid: newUid(tx),
-    balance: zero(tx, '0x2::sui::SUI'),
+    balance: zero(tx, '0x2::iota::IOTA'),
     option: some(tx, 'u64', 100n),
     optionObj: some(tx, Bar.$typeName, createBar(tx, 100n)),
     optionNone: none(tx, 'u64'),
-    balanceGeneric: zero(tx, '0x2::sui::SUI'),
+    balanceGeneric: zero(tx, '0x2::iota::IOTA'),
     optionGeneric: some(tx, 'u64', 200n),
     optionGenericNone: none(tx, 'u64'),
   })
@@ -434,11 +434,11 @@ it('decodes special-cased types correctly', async () => {
     url: 'https://example.com',
     idField: '0xfaf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5',
     uid,
-    balance: Balance.r(SUI.p).new({ value: 0n }),
+    balance: Balance.r(IOTA.p).new({ value: 0n }),
     option: 100n,
     optionObj: Bar.r.new({ value: 100n }),
     optionNone: null,
-    balanceGeneric: Balance.r(SUI.p).new({ value: 0n }),
+    balanceGeneric: Balance.r(IOTA.p).new({ value: 0n }),
     optionGeneric: 200n,
     optionGenericNone: null,
   })
@@ -459,7 +459,7 @@ it('decodes special-cased types as generics correctly', async () => {
     '0x2::url::Url',
     '0x2::object::ID',
     '0x2::object::UID',
-    '0x2::balance::Balance<0x2::sui::SUI>',
+    '0x2::balance::Balance<0x2::iota::IOTA>',
     '0x1::option::Option<u64>',
     '0x1::option::Option<u64>',
   ] as [string, string, string, string, string, string, string, string]
@@ -469,7 +469,7 @@ it('decodes special-cased types as generics correctly', async () => {
     Url.reified(),
     ID.reified(),
     UID.reified(),
-    Balance.reified(SUI.p),
+    Balance.reified(IOTA.p),
     Option.reified('u64'),
     Option.reified('u64'),
   ] as const
@@ -480,7 +480,7 @@ it('decodes special-cased types as generics correctly', async () => {
     url: newUnsafeFromBytes(tx, Array.from(encoder.encode('https://example.com'))),
     idField: idFromAddress(tx, 'faf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5'),
     uid: newUid(tx),
-    balance: zero(tx, '0x2::sui::SUI'),
+    balance: zero(tx, '0x2::iota::IOTA'),
     option: some(tx, 'u64', 100n),
     optionNone: none(tx, 'u64'),
   })
@@ -526,7 +526,7 @@ it('decodes special-cased types as generics correctly', async () => {
     url: 'https://example.com',
     idField: '0xfaf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5',
     uid,
-    balance: Balance.r(SUI.p).new({ value: 0n }),
+    balance: Balance.r(IOTA.p).new({ value: 0n }),
     option: 100n,
     optionNone: null,
   })
@@ -542,13 +542,13 @@ it('calls function correctly when special types are used', async () => {
   const encoder = new TextEncoder()
 
   const reifiedArgs = [
-    SUI.p,
+    IOTA.p,
     vector(Option.reified(Option.reified(vector(vector('u64'))))),
   ] as const
 
   createSpecial(
     tx,
-    ['0x2::sui::SUI', 'vector<0x1::option::Option<0x1::option::Option<vector<vector<u64>>>>>'],
+    ['0x2::iota::IOTA', 'vector<0x1::option::Option<0x1::option::Option<vector<vector<u64>>>>>'],
     {
       string: 'string',
       asciiString: 'ascii',
@@ -558,11 +558,11 @@ it('calls function correctly when special types are used', async () => {
         '0xfaf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5'
       ),
       uid: newUid(tx),
-      balance: zero(tx, '0x2::sui::SUI'),
+      balance: zero(tx, '0x2::iota::IOTA'),
       option: 100n,
       optionObj: some(tx, Bar.$typeName, createBar(tx, 100n)),
       optionNone: null,
-      balanceGeneric: zero(tx, '0x2::sui::SUI'),
+      balanceGeneric: zero(tx, '0x2::iota::IOTA'),
       optionGeneric: [[[200n, 300n]], null, [[400n, 500n]]],
       optionGenericNone: null,
     }
@@ -593,19 +593,19 @@ it('calls function correctly when special types are used', async () => {
     throw new Error(`not a moveObject`)
   }
 
-  expect(WithSpecialTypes.fromFieldsWithTypes([SUI.p, reifiedArgs[1]], obj.data.content)).toEqual(
-    WithSpecialTypes.r(SUI.p, reifiedArgs[1]).new({
+  expect(WithSpecialTypes.fromFieldsWithTypes([IOTA.p, reifiedArgs[1]], obj.data.content)).toEqual(
+    WithSpecialTypes.r(IOTA.p, reifiedArgs[1]).new({
       id,
       string: 'string',
       asciiString: 'ascii',
       url: 'https://example.com',
       idField: '0xfaf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5',
       uid: (obj.data.content.fields as { uid: { id: string } }).uid.id,
-      balance: Balance.r(SUI.p).new({ value: 0n }),
+      balance: Balance.r(IOTA.p).new({ value: 0n }),
       option: 100n,
       optionObj: Bar.r.new({ value: 100n }),
       optionNone: null,
-      balanceGeneric: Balance.r(SUI.p).new({ value: 0n }),
+      balanceGeneric: Balance.r(IOTA.p).new({ value: 0n }),
       optionGeneric: [[[200n, 300n]], null, [[400n, 500n]]],
       optionGenericNone: null,
     })
@@ -623,7 +623,7 @@ it('calls function correctly when special types are used as generics', async () 
     Url.reified(),
     ID.reified(),
     UID.reified(),
-    Balance.reified(SUI.p),
+    Balance.reified(IOTA.p),
     Option.reified(vector(Option.reified('u64'))),
     Option.reified('u64'),
   ] as const
@@ -636,7 +636,7 @@ it('calls function correctly when special types are used as generics', async () 
       '0x2::url::Url',
       '0x2::object::ID',
       '0x2::object::UID',
-      '0x2::balance::Balance<0x2::sui::SUI>',
+      '0x2::balance::Balance<0x2::iota::IOTA>',
       '0x1::option::Option<vector<0x1::option::Option<u64>>>',
       '0x1::option::Option<u64>',
     ],
@@ -649,7 +649,7 @@ it('calls function correctly when special types are used as generics', async () 
         '0xfaf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5'
       ),
       uid: newUid(tx),
-      balance: zero(tx, '0x2::sui::SUI'),
+      balance: zero(tx, '0x2::iota::IOTA'),
       option: [5n, null, 3n],
       optionNone: null,
     }
@@ -690,7 +690,7 @@ it('calls function correctly when special types are used as generics', async () 
       url: 'https://example.com',
       idField: '0xfaf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5',
       uid: (obj.data.content.fields as { uid: { id: string } }).uid.id,
-      balance: Balance.r(SUI.p).new({ value: 0n }),
+      balance: Balance.r(IOTA.p).new({ value: 0n }),
       option: [5n, null, 3n],
       optionNone: null,
     })
@@ -823,22 +823,22 @@ it('loads with loader correctly', async () => {
 })
 
 it('converts to json correctly', () => {
-  const U = WithSpecialTypes.reified(SUI.p, 'u64')
+  const U = WithSpecialTypes.reified(IOTA.p, 'u64')
   const V = vector(WithTwoGenerics.reified(Bar.reified(), 'u8'))
 
   const obj = WithTwoGenerics.r(U, V).new({
-    genericField1: WithSpecialTypes.r(SUI.p, 'u64').new({
+    genericField1: WithSpecialTypes.r(IOTA.p, 'u64').new({
       id: '0x1',
       string: 'string',
       asciiString: 'ascii',
       url: 'https://example.com',
       idField: '0x2',
       uid: '0x3',
-      balance: Balance.r(SUI.p).new({ value: 0n }),
+      balance: Balance.r(IOTA.p).new({ value: 0n }),
       option: 100n,
       optionObj: Bar.r.new({ value: 100n }),
       optionNone: null,
-      balanceGeneric: Balance.r(SUI.p).new({ value: 0n }),
+      balanceGeneric: Balance.r(IOTA.p).new({ value: 0n }),
       optionGeneric: 200n,
       optionGenericNone: null,
     }),
@@ -853,7 +853,7 @@ it('converts to json correctly', () => {
   const exp: ReturnType<typeof obj.toJSON> = {
     $typeName: `${PKG_V1}::fixture::WithTwoGenerics`,
     $typeArgs: [
-      `${PKG_V1}::fixture::WithSpecialTypes<0x2::sui::SUI, u64>`,
+      `${PKG_V1}::fixture::WithSpecialTypes<0x2::iota::IOTA, u64>`,
       `vector<${PKG_V1}::fixture::WithTwoGenerics<${PKG_V1}::fixture::Bar, u8>>`,
     ],
     genericField1: {
@@ -1045,7 +1045,7 @@ it('decodes address field correctly', async () => {
 
   expect(Foo.fromBcs('address', fromB64(foo.data.bcs.bcsBytes))).toEqual(exp)
   expect(Foo.fromFieldsWithTypes('address', foo.data.content)).toEqual(exp)
-  expect(Foo.fromSuiParsedData('address', foo.data.content)).toEqual(exp)
+  expect(Foo.fromIotaParsedData('address', foo.data.content)).toEqual(exp)
   expect(await Foo.fetch(client, 'address', id)).toEqual(exp)
 
   const de = Foo.fromFieldsWithTypes('address', foo.data.content)
@@ -1056,7 +1056,7 @@ it('fails when fetching mismatch reified type', async () => {
   const tx = new Transaction()
 
   const encoder = new TextEncoder()
-  const typeArgs = ['0x2::sui::SUI', 'u64'] as [string, string]
+  const typeArgs = ['0x2::iota::IOTA', 'u64'] as [string, string]
 
   createSpecial(tx, typeArgs, {
     string: utf8(tx, Array.from(encoder.encode('string'))),
@@ -1064,11 +1064,11 @@ it('fails when fetching mismatch reified type', async () => {
     url: newUnsafeFromBytes(tx, Array.from(encoder.encode('https://example.com'))),
     idField: idFromAddress(tx, 'faf60f9f9d1f6c490dce8673c1371b9df456e0c183f38524e5f78d959ea559a5'),
     uid: newUid(tx),
-    balance: zero(tx, '0x2::sui::SUI'),
+    balance: zero(tx, '0x2::iota::IOTA'),
     option: some(tx, 'u64', 100n),
     optionObj: some(tx, Bar.$typeName, createBar(tx, 100n)),
     optionNone: none(tx, 'u64'),
-    balanceGeneric: zero(tx, '0x2::sui::SUI'),
+    balanceGeneric: zero(tx, '0x2::iota::IOTA'),
     optionGeneric: some(tx, 'u64', 200n),
     optionGenericNone: none(tx, 'u64'),
   })
@@ -1088,10 +1088,10 @@ it('fails when fetching mismatch reified type', async () => {
   await expect(() => {
     return WithSpecialTypes.r(phantom('u8'), 'u8').fetch(client, id)
   }).rejects.toThrowError(
-    `type argument mismatch at position 0: expected 'u8' but got '0x2::sui::SUI'`
+    `type argument mismatch at position 0: expected 'u8' but got '0x2::iota::IOTA'`
   )
   await expect(() => {
-    return WithSpecialTypes.r(SUI.p, 'u8').fetch(client, id)
+    return WithSpecialTypes.r(IOTA.p, 'u8').fetch(client, id)
   }).rejects.toThrowError(`type argument mismatch at position 1: expected 'u8' but got 'u64'`)
 })
 

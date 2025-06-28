@@ -1,10 +1,10 @@
 module examples::example_coin {
     use std::option;
-    use sui::coin::{Self, TreasuryCap, Coin};
-    use sui::balance::{Balance};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-    use sui::object::{Self, UID};
+    use iota::coin::{Self, TreasuryCap, Coin};
+    use iota::balance::{Balance};
+    use iota::tx_context::{Self, TxContext};
+    use iota::transfer;
+    use iota::object::{Self, UID};
 
     public struct EXAMPLE_COIN has drop {}
 

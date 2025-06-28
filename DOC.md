@@ -2,11 +2,11 @@
 
 ## gen.toml
 
-`gen.toml` is the configuration file for the generator. It has two sections: `config` and `packages`. The `config` section contains the optional `rpc` field which specifies the RPC URL to use for fetching on-chain packages. If not specified, it defaults to `https://fullnode.mainnet.sui.io:443`.
+`gen.toml` is the configuration file for the generator. It has two sections: `config` and `packages`. The `config` section contains the optional `rpc` field which specifies the RPC URL to use for fetching on-chain packages. If not specified, it defaults to `https://api.mainnet.iota.org`.
 
 The `packages` section contains a list of packages to generate code for. For source packages, the syntax is the same as in `Move.toml`, while for on-chain packages, the `id` is specified (see examples above).
 
-The dependency resolution for source packages works the same as in `Move.toml` -- if there are packages that transitively depend on the same package of a different version, this needs to be resolved by specifying the version explicitly in `gen.toml` (see https://docs.sui.io/build/dependency-overrides).
+The dependency resolution for source packages works the same as in `Move.toml` -- if there are packages that transitively depend on the same package of a different version, this needs to be resolved by specifying the version explicitly in `gen.toml` (see https://docs.iota.org/build/dependency-overrides).
 
 In case of on-chain packages, if the same package is specified multiple times with different versions, the version resolution will be done automatically by using the latest version in the dependency graph (not the latest version on-chain).
 
@@ -43,7 +43,7 @@ The generated code has the following structure:
 
 **`_dependencies`** contains generated code of the direct and transitive dependencies of packages listed in `gen.toml`. While their contents are similar to those of listed packages, these are not intended to be imported or used directly as its APIs are not guaranteed to be stable and may change. Any package code that's inteded to be used directly in the app should be listed in `gen.toml`.
 
-Due to a technical detail, the generator currently generates two separate dependency graphs for on-chain and source packages under `_dependencies`. This causes the code for some of the dependencies to be unnecessarily duplicated but will be fixed in a future version (see https://github.com/kunalabs-io/sui-client-gen/issues/1#issuecomment-1554754842).
+Due to a technical detail, the generator currently generates two separate dependency graphs for on-chain and source packages under `_dependencies`. This causes the code for some of the dependencies to be unnecessarily duplicated but will be fixed in a future version (see https://github.com/3MateLabs/iota-client-gen/issues/1#issuecomment-1554754842).
 
 Each **`<package>`** directory contains a separate directory for each of its modules and `index.ts` and `init.ts` files.
 
@@ -76,7 +76,7 @@ It's also possible to pass them in form of `TransactionArgument` which makes it 
 
 ### Object parameters
 
-Passing in object references can be done with an ID string (e.g., `"0x12345"`), `ObjectCallArg`, or `TransactionArgument` (as defined in  `@mysten/sui.js`). This makes it composable with return values from other calls in the `TransactionBlock` and allows manual construction using `txb.object(...)`.
+Passing in object references can be done with an ID string (e.g., `"0x12345"`), `ObjectCallArg`, or `TransactionArgument` (as defined in  `@iota/iota-sdk`). This makes it composable with return values from other calls in the `TransactionBlock` and allows manual construction using `txb.object(...)`.
 
 ### Vectors
 
@@ -90,7 +90,7 @@ String types (`0x1::string::String` and `0x1::ascii::String`) and ID (`0x2::obje
 
 ### Option
 
-Option type (`0x1::option::Option`) also has special handling in that the underlying value can be passed in directly and it will be automatically wrapped into `Option<T>` where passing in `null` corresponds to `none`. In the case of non-primitive types, this means that the framework will call `0x1::option::some` or `0x1::option:none` internally to do the wrapping (with primitive types this is not necessary as it will be done by the Sui runtime).
+Option type (`0x1::option::Option`) also has special handling in that the underlying value can be passed in directly and it will be automatically wrapped into `Option<T>` where passing in `null` corresponds to `none`. In the case of non-primitive types, this means that the framework will call `0x1::option::some` or `0x1::option:none` internally to do the wrapping (with primitive types this is not necessary as it will be done by the IOTA runtime).
 
 If the value is passed in as `TransactionArgument` no wrapping will be done and the argument will be used as is. This allows for the argument to be constructed manually and for composability with other function calls in the `TransactionBlock`.
 
@@ -135,4 +135,4 @@ For structs with the `key` ability, the `fetch` static method is also generated,
 
 ## Design Doc
 
-For more technical details and reasoning behind the design decisions, see the design doc https://github.com/kunalabs-io/sui-client-gen/issues/1.
+For more technical details and reasoning behind the design decisions, see the design doc https://github.com/3MateLabs/iota-client-gen/issues/1.

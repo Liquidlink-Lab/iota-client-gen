@@ -6,8 +6,8 @@ use convert_case::{Case, Casing};
 use genco::prelude::*;
 use genco::tokens::{Item, ItemStr};
 use move_core_types::account_address::AccountAddress;
-use move_model_2::compiled::Type;
-use move_model_2::model::{self, Datatype, SourceKind, WITH_SOURCE};
+use move_model_2::compiled_model::Type;
+use move_model_2::source_model::{self as model, Datatype};
 use move_symbol_pool::Symbol;
 
 #[rustfmt::skip]
@@ -47,11 +47,11 @@ pub fn package_import_name(pkg_name: Symbol) -> String {
         .to_case(Case::Kebab)
 }
 
-fn struct_full_name<const HAS_SOURCE: SourceKind>(s: &model::Struct<HAS_SOURCE>) -> String {
+fn struct_full_name(s: &model::Struct) -> String {
     format!("{}::{}", s.module().name(), s.name())
 }
 
-fn func_full_name<const HAS_SOURCE: SourceKind>(f: &model::Function<HAS_SOURCE>) -> String {
+fn func_full_name(f: &model::Function) -> String {
     format!("{}::{}", f.module().name(), f.name())
 }
 
@@ -93,9 +93,9 @@ pub struct StructClassImportCtx<'a> {
 }
 
 impl<'a> StructClassImportCtx<'a> {
-    pub fn new<const HAS_SOURCE: SourceKind>(
+    pub fn new(
         reserved_names: Vec<String>,
-        module: &model::Module<HAS_SOURCE>,
+        module: &model::Module,
         top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
         is_structs_gen: bool,
     ) -> Self {
@@ -114,8 +114,8 @@ impl<'a> StructClassImportCtx<'a> {
         }
     }
 
-    pub fn for_func_gen<const HAS_SOURCE: SourceKind>(
-        module: &model::Module<HAS_SOURCE>,
+    pub fn for_func_gen(
+        module: &model::Module,
         top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
     ) -> Self {
         let reserved_names = vec![];
@@ -123,8 +123,8 @@ impl<'a> StructClassImportCtx<'a> {
         StructClassImportCtx::new(reserved_names, module, top_level_pkg_names, is_structs_gen)
     }
 
-    pub fn for_struct_gen<const HAS_SOURCE: SourceKind>(
-        module: &model::Module<HAS_SOURCE>,
+    pub fn for_struct_gen(
+        module: &model::Module,
         top_level_pkg_names: &'a BTreeMap<AccountAddress, move_symbol_pool::Symbol>,
     ) -> Self {
         let reserved_names = module
@@ -139,9 +139,9 @@ impl<'a> StructClassImportCtx<'a> {
 
     /// Returns the import path for a struct. If the struct is defined in the current module,
     /// returns `None`.
-    fn import_path_for_struct<const HAS_SOURCE: SourceKind>(
+    fn import_path_for_struct(
         &self,
-        strct: &model::Struct<HAS_SOURCE>,
+        strct: &model::Struct,
     ) -> Option<String> {
         let module = strct.module();
         let module_name = module_import_name(module.name());
@@ -172,11 +172,8 @@ impl<'a> StructClassImportCtx<'a> {
 
                 Some(format!("../../{}/{}/structs", strct_pkg_name, module_name))
             } else if self.is_top_level {
-                let dep_dir = if HAS_SOURCE == WITH_SOURCE {
-                    "source"
-                } else {
-                    "onchain"
-                };
+                // For now, assume source is available
+                let dep_dir = "source";
 
                 Some(format!(
                     "../../_dependencies/{}/{}/{}/structs",
@@ -215,9 +212,9 @@ impl<'a> StructClassImportCtx<'a> {
 
     /// Returns the class name for a struct and imports it if necessary. If a class with the same name
     /// has already been imported, imports it with an alias (e.g. Foo1, Foo2, etc.).
-    fn get_class<const HAS_SOURCE: SourceKind>(
+    fn get_class(
         &mut self,
-        strct: &model::Struct<HAS_SOURCE>,
+        strct: &model::Struct,
     ) -> js::Tokens {
         let class_name = strct.name().to_string();
         let import_path = self.import_path_for_struct(strct);
@@ -253,8 +250,8 @@ impl<'a> StructClassImportCtx<'a> {
     }
 }
 
-fn get_origin_pkg_addr<const HAS_SOURCE: SourceKind>(
-    strct: &model::Struct<HAS_SOURCE>,
+fn get_origin_pkg_addr(
+    strct: &model::Struct,
     type_origin_table: &TypeOriginTable,
 ) -> AccountAddress {
     let addr = strct.module().package().address();
@@ -277,8 +274,8 @@ fn get_origin_pkg_addr<const HAS_SOURCE: SourceKind>(
     *origin_addr
 }
 
-fn strct_qualified_member_name<const HAS_SOURCE: SourceKind>(
-    strct: &model::Struct<HAS_SOURCE>,
+fn strct_qualified_member_name(
+    strct: &model::Struct,
     type_origin_table: &TypeOriginTable,
 ) -> (AccountAddress, Symbol, Symbol) {
     let origin_package = get_origin_pkg_addr(strct, type_origin_table);
@@ -286,8 +283,8 @@ fn strct_qualified_member_name<const HAS_SOURCE: SourceKind>(
     (origin_package, module.name(), strct.name())
 }
 
-fn gen_full_name_with_address<const HAS_SOURCE: SourceKind>(
-    strct: &model::Struct<HAS_SOURCE>,
+fn gen_full_name_with_address(
+    strct: &model::Struct,
     type_origin_table: &TypeOriginTable,
     version_table: &VersionTable,
     open_quote: bool,
@@ -338,8 +335,8 @@ fn gen_field_name(field: Symbol) -> impl FormatInto<JavaScript> {
     }
 }
 
-pub fn gen_package_init_ts<const HAS_SOURCE: SourceKind>(
-    pkg: &model::Package<HAS_SOURCE>,
+pub fn gen_package_init_ts(
+    pkg: &model::Package,
     framework: &FrameworkImportCtx,
 ) -> js::Tokens {
     let struct_class_loader = &framework.import("loader", "StructClassLoader");
@@ -493,29 +490,30 @@ enum QuoteItem {
     Literal(String),
 }
 
-fn todo_panic_if_enum<'a, const HAS_SOURCE: SourceKind>(
-    module: &model::Module<'a, HAS_SOURCE>,
+fn todo_panic_if_enum<'a>(
+    module: &'a model::Module,
     id: Symbol,
-) -> model::Struct<'a, HAS_SOURCE> {
+) -> model::Struct<'a> {
     match module.datatype(id) {
-        Datatype::Struct(s) => s,
-        Datatype::Enum(_) => panic!("enums are not supported yet"),
+        Some(Datatype::Struct(s)) => s,
+        Some(Datatype::Enum(_)) => panic!("enums are not supported yet"),
+        None => panic!("datatype not found: {}", id),
     }
 }
 
-fn gen_bcs_def_for_type<const HAS_SOURCE: SourceKind>(
+fn gen_bcs_def_for_type(
     ty: &Type,
-    env: &model::Model<HAS_SOURCE>,
+    env: &model::Model,
     type_param_names: &[QuoteItem],
     import_ctx: &mut StructClassImportCtx,
 ) -> js::Tokens {
     let mut toks = js::Tokens::new();
     toks.append(Item::OpenQuote(true));
 
-    fn inner<const HAS_SOURCE: SourceKind>(
+    fn inner(
         toks: &mut Tokens<JavaScript>,
         ty: &Type,
-        env: &model::Model<HAS_SOURCE>,
+        env: &model::Model,
         type_param_names: &[QuoteItem],
         import_ctx: &mut StructClassImportCtx,
     ) {
@@ -528,8 +526,19 @@ fn gen_bcs_def_for_type<const HAS_SOURCE: SourceKind>(
                 }
                 QuoteItem::Literal(s) => toks.append(Item::Literal(ItemStr::from(s))),
             },
-            Type::Datatype(id_tys) => {
-                let (id, ts) = &**id_tys;
+            Type::Datatype(id) => {
+                let ((pid, mid), sid) = **id;
+                let module_env = env.module((pid, mid));
+
+                let struct_env = todo_panic_if_enum(&module_env, sid);
+                let class = import_ctx.get_class(&struct_env);
+
+                toks.append(Item::Literal(ItemStr::from("${")));
+                quote_in! { *toks => $(class).$$typeName };
+                toks.append(Item::Literal(ItemStr::from("}")));
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (id, ts) = &**inst;
                 let ((pid, mid), sid) = *id;
                 let module_env = env.module((pid, mid));
 
@@ -566,7 +575,7 @@ fn gen_bcs_def_for_type<const HAS_SOURCE: SourceKind>(
             Type::U256 => quote_in!(*toks => u256),
             Type::Bool => quote_in!(*toks => bool),
             Type::Address => quote_in!(*toks => address),
-            Type::Reference(_, _) => panic!("unexpected type: {:?}", ty),
+            Type::Reference(_) | Type::MutableReference(_) => panic!("unexpected type: {:?}", ty),
         }
     }
 
@@ -586,17 +595,28 @@ fn type_is_pure(ty: &Type) -> bool {
         | Type::U256
         | Type::Bool
         | Type::Address => true,
-        Type::Reference(_, ty) => type_is_pure(ty),
+        Type::Reference(ty) | Type::MutableReference(ty) => type_is_pure(ty),
         Type::Vector(ty) => type_is_pure(ty),
-        Type::Datatype(id_tys) => {
-            let (id, ts) = &**id_tys;
-            let ((pid, mid), sid) = *id;
+        Type::Datatype(id) => {
+            let ((pid, mid), sid) = **id;
             match (pid, mid.as_str(), sid.as_str()) {
                 (AccountAddress::ONE, "string", "String")
                 | (AccountAddress::ONE, "ascii", "String")
                 | (AccountAddress::TWO, "object", "ID") => true,
-                (AccountAddress::ONE, "option", "Option") => type_is_pure(&ts[0]),
                 _ => false,
+            }
+        }
+        Type::DatatypeInstantiation(inst) => {
+            let (id, ts) = &**inst;
+            let ((pid, mid), sid) = *id;
+            match (pid, mid.as_str(), sid.as_str()) {
+                (AccountAddress::ONE, "option", "Option") => type_is_pure(&ts[0]),
+                _ => match (pid, mid.as_str(), sid.as_str()) {
+                    (AccountAddress::ONE, "string", "String")
+                    | (AccountAddress::ONE, "ascii", "String")
+                    | (AccountAddress::TWO, "object", "ID") => true,
+                    _ => false,
+                },
             }
         }
         _ => false,
@@ -606,52 +626,48 @@ fn type_is_pure(ty: &Type) -> bool {
 // returns Option's type argument if the type is Option
 fn type_is_option(ty: &Type) -> Option<&Type> {
     match ty {
-        Type::Datatype(id_tys) => {
-            let (id, ts) = &**id_tys;
+        Type::DatatypeInstantiation(inst) => {
+            let (id, ts) = &**inst;
             let ((pid, mid), sid) = *id;
             match (pid, mid.as_str(), sid.as_str()) {
                 (AccountAddress::ONE, "option", "Option") => Some(&ts[0]),
                 _ => None,
             }
         }
-        Type::Reference(_, ty) => type_is_option(ty),
+        Type::Reference(ty) | Type::MutableReference(ty) => type_is_option(ty),
         _ => None,
     }
 }
 
 fn type_is_tx_context(ty: &Type) -> bool {
     match ty {
-        Type::Datatype(id_tys) => {
-            let (id, _ts) = &**id_tys;
-            let ((address, module), name) = *id;
+        Type::Datatype(id) => {
+            let ((address, module), name) = **id;
             address == AccountAddress::TWO
                 && module.as_str() == "tx_context"
                 && name.as_str() == "TxContext"
         }
-        Type::Reference(_, ty) => type_is_tx_context(ty),
+        Type::Reference(ty) | Type::MutableReference(ty) => type_is_tx_context(ty),
         _ => false,
     }
 }
 
-pub struct FunctionsGen<'a, 'model, const HAS_SOURCE: SourceKind> {
+pub struct FunctionsGen<'a, 'model> {
     pub import_ctx: &'a mut StructClassImportCtx<'a>,
     framework: FrameworkImportCtx,
-    func: model::Function<'model, HAS_SOURCE>,
+    func: model::Function<'model>,
 }
 
-impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOURCE> {
+impl<'a, 'model> FunctionsGen<'a, 'model> {
     /// Returns Ok(self) if the function has a compiled representation
     /// Otherwise returns Err(import_ctx) simply to help with lifetime issues
     pub fn new(
         import_ctx: &'a mut StructClassImportCtx<'a>,
         framework: FrameworkImportCtx,
-        func: model::Function<'model, HAS_SOURCE>,
+        func: model::Function<'model>,
     ) -> Result<Self, &'a mut StructClassImportCtx<'a>> {
-        if func.maybe_compiled().is_none() {
-            // skip functions without compiled representation, e.g. macros
-            assert!(HAS_SOURCE == WITH_SOURCE);
-            Err(import_ctx)
-        } else {
+        // All functions should have compiled representation in the new API
+        {
             Ok(FunctionsGen {
                 import_ctx,
                 framework,
@@ -680,8 +696,16 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
                         .field_name_from_type(ty, type_param_names)?
                         .to_case(Case::Pascal)
             }
-            Type::Datatype(id_tys) => {
-                let (id, _ts) = &**id_tys;
+            Type::Datatype(id) => {
+                let ((pid, mid), sid) = **id;
+                let module = self.func.model().module((pid, mid));
+                todo_panic_if_enum(&module, sid)
+                    .name()
+                    .to_string()
+                    .to_case(Case::Camel)
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (id, _ts) = &**inst;
                 let ((pid, mid), sid) = *id;
                 let module = self.func.model().module((pid, mid));
                 todo_panic_if_enum(&module, sid)
@@ -689,7 +713,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
                     .to_string()
                     .to_case(Case::Camel)
             }
-            Type::Reference(_, ty) => self.field_name_from_type(ty, type_param_names)?,
+            Type::Reference(ty) | Type::MutableReference(ty) => self.field_name_from_type(ty, type_param_names)?,
             Type::TypeParameter(idx) => type_param_names[*idx as usize]
                 .to_owned()
                 .to_case(Case::Camel),
@@ -719,32 +743,31 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
     /// Returns type parameter names for a function. If type parameter names are not defined
     /// it will return `T0`, `T1`, etc.
     fn func_type_param_names(&self) -> Vec<String> {
-        match self.func.kind() {
-            model::Kind::WithSource(func) => func
-                .info()
-                .signature
-                .type_parameters
+        // Get type parameter names - try source info first, then compiled
+        let func_info = self.func.info();
+        if !func_info.signature.type_parameters.is_empty() {
+            func_info.signature.type_parameters
                 .iter()
                 .map(|tp| tp.user_specified_name.value.to_string())
-                .collect(),
-            model::Kind::WithoutSource(func) => (0..func.compiled().type_parameters.len())
+                .collect()
+        } else if let Some(compiled) = self.func.compiled() {
+            (0..compiled.type_parameters.len())
                 .map(|idx| format!("T{}", idx))
-                .collect(),
+                .collect()
+        } else {
+            vec![]
         }
     }
 
     fn parameter_variable_names(&self) -> Option<Vec<Symbol>> {
-        match self.func.kind() {
-            model::Kind::WithSource(func) => Some(
-                func.info()
-                    .signature
-                    .parameters
-                    .iter()
-                    .map(|(_mut, v, _ty)| v.value.name)
-                    .collect(),
-            ),
-            model::Kind::WithoutSource(_) => None,
-        }
+        // info() now returns &FunctionInfo directly (no Option)
+        let info = self.func.info();
+        Some(
+            info.signature.parameters
+                .iter()
+                .map(|(_mut, v, _ty)| v.value.name)
+                .collect()
+        )
     }
 
     // Generates TS interface field names from function's params. Used in the `<..>Args` interface
@@ -753,7 +776,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
     // In case this causes a name collision, it will append a number to the name.
     fn params_to_field_names(&self, ignore_tx_context: bool) -> Vec<(String, Type)> {
         let params = self.parameter_variable_names();
-        let param_types = &self.func.maybe_compiled().unwrap().parameters;
+        let param_types = &self.func.compiled().unwrap().parameters;
         let type_param_names = self.func_type_param_names();
 
         let param_to_field_name = |idx: usize, type_: &Type| {
@@ -820,9 +843,9 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
     /// Generates a TS type for a function's parameter type. Used in the `<..>Args` interface.
     fn param_type_to_field_type(&self, ty: &Type) -> js::Tokens {
         let generic_arg = &self.framework.import("util", "GenericArg");
-        let transaction_argument = &js::import("@mysten/sui/transactions", "TransactionArgument");
+        let transaction_argument = &js::import("@iota/iota-sdk/transactions", "TransactionArgument");
         let transaction_object_input =
-            &js::import("@mysten/sui/transactions", "TransactionObjectInput");
+            &js::import("@iota/iota-sdk/transactions", "TransactionObjectInput");
 
         match ty {
             Type::U8 | Type::U16 | Type::U32 => {
@@ -836,9 +859,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
             Type::Vector(ty) => {
                 quote!(Array<$(self.param_type_to_field_type(ty))> | $transaction_argument)
             }
-            Type::Datatype(id_tys) => {
-                let (id, ts) = &**id_tys;
-                let ((pid, mid), sid) = *id;
+            Type::Datatype(id) => {
+                let ((pid, mid), sid) = **id;
                 match (pid, mid.as_str(), sid.as_str()) {
                     (AccountAddress::ONE, "string", "String")
                     | (AccountAddress::ONE, "ascii", "String") => {
@@ -847,13 +869,21 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
                     (AccountAddress::TWO, "object", "ID") => {
                         quote!(string | $transaction_argument)
                     }
+                    _ => quote!($transaction_object_input),
+                }
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (id, ts) = &**inst;
+                let ((pid, mid), sid) = *id;
+                match (pid, mid.as_str(), sid.as_str()) {
                     (AccountAddress::ONE, "option", "Option") => {
                         quote!(($(self.param_type_to_field_type(&ts[0])) | $transaction_argument | null))
                     }
                     _ => quote!($transaction_object_input),
                 }
             }
-            Type::Reference(_, ty) => self.param_type_to_field_type(ty),
+            Type::Reference(ty) => self.param_type_to_field_type(ty),
+            Type::MutableReference(ty) => self.param_type_to_field_type(ty),
             Type::TypeParameter(_) => quote!($generic_arg),
         }
     }
@@ -879,7 +909,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
     #[allow(clippy::only_used_in_recursion)]
     fn type_strip_ref(&self, ty: Type) -> Type {
         match ty {
-            Type::Reference(_, ty) => self.type_strip_ref(*ty),
+            Type::Reference(ty) | Type::MutableReference(ty) => self.type_strip_ref(*ty),
             _ => ty,
         }
     }
@@ -961,7 +991,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> FunctionsGen<'a, 'model, HAS_SOUR
 
     /// Generates a function binding for a function.
     pub fn gen_fun_binding(&mut self, tokens: &mut Tokens<JavaScript>) -> Result<()> {
-        let transaction = &js::import("@mysten/sui/transactions", "Transaction");
+        let transaction = &js::import("@iota/iota-sdk/transactions", "Transaction");
         let published_at = &js::import("..", "PUBLISHED_AT");
 
         let param_field_names = self.params_to_field_names(true);
@@ -1024,21 +1054,21 @@ enum ExtendsOrWraps {
     Wraps(js::Tokens),
 }
 
-pub struct StructsGen<'a, 'model, const HAS_SOURCE: SourceKind> {
+pub struct StructsGen<'a, 'model> {
     pub import_ctx: &'a mut StructClassImportCtx<'a>,
     framework: FrameworkImportCtx,
     type_origin_table: &'a TypeOriginTable,
     version_table: &'a VersionTable,
-    strct: model::Struct<'model, HAS_SOURCE>,
+    strct: model::Struct<'model>,
 }
 
-impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE> {
+impl<'a, 'model> StructsGen<'a, 'model> {
     pub fn new(
         import_ctx: &'a mut StructClassImportCtx<'a>,
         framework: FrameworkImportCtx,
         type_origin_table: &'a TypeOriginTable,
         version_table: &'a VersionTable,
-        strct: model::Struct<'model, HAS_SOURCE>,
+        strct: model::Struct<'model>,
     ) -> Self {
         StructsGen {
             import_ctx,
@@ -1110,8 +1140,17 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                     ty, type_param_names, wrap_non_phantom_type_parameter, wrap_phantom_type_parameter, false
                 ))>)
             }
-            Type::Datatype(id_tys) => {
-                let (id, ts) = &**id_tys;
+            Type::Datatype(id) => {
+                let ((pid, mid), sid) = **id;
+                let field_module = self.strct.model().module((pid, mid));
+
+                let field_strct = todo_panic_if_enum(&field_module, sid);
+                let class = self.import_ctx.get_class(&field_strct);
+
+                quote!($class)
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (id, ts) = &**inst;
                 let ((pid, mid), sid) = *id;
                 let field_module = self.strct.model().module((pid, mid));
 
@@ -1127,7 +1166,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                             Type::TypeParameter(t_idx) => {
                                 !strct_type_params[*t_idx as usize].is_phantom
                             }
-                            Type::Datatype(_) | Type::Vector(_) => true,
+                            Type::Datatype(_) | Type::DatatypeInstantiation(_) | Type::Vector(_) => true,
                             _ => false,
                         };
 
@@ -1164,7 +1203,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                     None => quote!($ty),
                 }
             }
-            Type::Reference(_, _) => panic!("unexpected type: {:?}", ty),
+            Type::Reference(_) | Type::MutableReference(_) => panic!("unexpected type: {:?}", ty),
         };
 
         if is_top_level {
@@ -1177,16 +1216,17 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
     /// Returns the type parameters of a struct. If the source map is available, the type parameters
     /// are named according to the source map. Otherwise, they are named `T0`, `T1`, etc.
     fn strct_type_param_names(&self) -> Vec<String> {
-        match self.strct.kind() {
-            model::Kind::WithSource(strct) => strct
-                .info()
-                .type_parameters
+        // Get type parameter names from source info if available
+        let info = self.strct.info();
+        if !info.type_parameters.is_empty() {
+            info.type_parameters
                 .iter()
                 .map(|param| param.param.user_specified_name.value.to_string())
-                .collect(),
-            model::Kind::WithoutSource(strct) => (0..strct.compiled().type_parameters.len())
+                .collect()
+        } else {
+            (0..self.strct.compiled().type_parameters.len())
                 .map(|idx| format!("T{}", idx))
-                .collect(),
+                .collect()
         }
     }
 
@@ -1213,9 +1253,9 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
         ty: &Type,
         type_param_names: &[String],
     ) -> js::Tokens {
-        let bcs = &js::import("@mysten/sui/bcs", "bcs");
-        let from_hex = &js::import("@mysten/sui/utils", "fromHEX");
-        let to_hex = &js::import("@mysten/sui/utils", "toHEX");
+        let bcs = &js::import("@iota/iota-sdk/bcs", "bcs");
+        let from_hex = &js::import("@iota/iota-sdk/utils", "fromHEX");
+        let to_hex = &js::import("@iota/iota-sdk/utils", "toHEX");
         match ty {
             Type::U8 => quote!($bcs.u8()),
             Type::U16 => quote!($bcs.u16()),
@@ -1231,8 +1271,17 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
             Type::Vector(ty) => {
                 quote!($bcs.vector($(self.gen_struct_bcs_def_field_value(ty, type_param_names))))
             }
-            Type::Datatype(id_tys) => {
-                let (id, ts) = &**id_tys;
+            Type::Datatype(id) => {
+                let ((pid, mid), sid) = **id;
+                let field_module = self.strct.model().module((pid, mid));
+                let field_strct = todo_panic_if_enum(&field_module, sid);
+
+                let class = self.import_ctx.get_class(&field_strct);
+
+                quote!($class.bcs)
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (id, ts) = &**inst;
                 let ((pid, mid), sid) = *id;
                 let field_module = self.strct.model().module((pid, mid));
                 let field_strct = todo_panic_if_enum(&field_module, sid);
@@ -1252,7 +1301,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
             Type::TypeParameter(idx) => {
                 quote!($(type_param_names[*idx as usize].to_owned()))
             }
-            Type::Reference(_, _) => panic!("unexpected type: {:?}", ty),
+            Type::Reference(_) | Type::MutableReference(_) => panic!("unexpected type: {:?}", ty),
         }
     }
 
@@ -1270,8 +1319,17 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
             Type::Vector(ty) => {
                 quote!($reified.vector($(self.gen_reified(ty, type_param_names))))
             }
-            Type::Datatype(id_tys) => {
-                let (id, ts) = &**id_tys;
+            Type::Datatype(id) => {
+                let ((pid, mid), sid) = **id;
+                let field_module = self.strct.model().module((pid, mid));
+
+                let field_strct = todo_panic_if_enum(&field_module, sid);
+                let class = self.import_ctx.get_class(&field_strct);
+
+                quote!($class.reified())
+            }
+            Type::DatatypeInstantiation(inst) => {
+                let (id, ts) = &**inst;
                 let ((pid, mid), sid) = *id;
                 let field_module = self.strct.model().module((pid, mid));
 
@@ -1304,7 +1362,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
             Type::TypeParameter(idx) => {
                 quote!($(type_param_names[*idx as usize].clone()))
             }
-            Type::Reference(_, _) => panic!("unexpected type: {:?}", ty),
+            Type::Reference(_) | Type::MutableReference(_) => panic!("unexpected type: {:?}", ty),
         }
     }
 
@@ -1378,14 +1436,14 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
 
     /// Generates the `is<StructName>` function for a struct.
     pub fn gen_is_type_func(&self, tokens: &mut js::Tokens) {
-        let compress_sui_type = &self.framework.import("util", "compressSuiType");
+        let compress_iota_type = &self.framework.import("util", "compressIotaType");
 
         let struct_name = self.strct.name().to_string();
         let type_params = self.strct_type_param_names();
 
         quote_in! { *tokens =>
             export function is$(&struct_name)(type: string): boolean {
-                type = $compress_sui_type(type);
+                type = $compress_iota_type(type);
                 $(if type_params.is_empty() {
                     return type === $(self.gen_full_name_with_address(true, false))
                 } else {
@@ -1488,7 +1546,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
     /// Generates the struct class for a struct.
     pub fn gen_struct_class(&mut self, tokens: &mut js::Tokens) {
         let fields_with_types = &self.framework.import("util", "FieldsWithTypes");
-        let compose_sui_type = &self.framework.import("util", "composeSuiType");
+        let compose_iota_type = &self.framework.import("util", "composeIotaType");
         let struct_class = &self.framework.import("reified", "StructClass");
         let field_to_json = &self.framework.import("reified", "fieldToJSON");
         let type_argument = &self.framework.import("reified", "TypeArgument");
@@ -1509,13 +1567,13 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
         let assert_fields_with_types_args_match = &self
             .framework
             .import("reified", "assertFieldsWithTypesArgsMatch");
-        let sui_parsed_data = &js::import("@mysten/sui/client", "SuiParsedData");
-        let sui_object_data = &js::import("@mysten/sui/client", "SuiObjectData");
-        let sui_client = &js::import("@mysten/sui/client", "SuiClient");
-        let bcs = &js::import("@mysten/sui/bcs", "bcs");
-        let bcs_type = &js::import("@mysten/sui/bcs", "BcsType");
-        let from_b64 = &js::import("@mysten/sui/utils", "fromB64");
-        let compress_sui_type = &self.framework.import("util", "compressSuiType");
+        let iota_parsed_data = &js::import("@iota/iota-sdk/client", "IotaParsedData");
+        let iota_object_data = &js::import("@iota/iota-sdk/client", "IotaObjectData");
+        let iota_client = &js::import("@iota/iota-sdk/client", "IotaClient");
+        let bcs = &js::import("@iota/iota-sdk/bcs", "bcs");
+        let bcs_type = &js::import("@iota/iota-sdk/bcs", "BcsType");
+        let from_b64 = &js::import("@iota/iota-sdk/utils", "fromB64");
+        let compress_iota_type = &self.framework.import("util", "compressIotaType");
 
         let struct_name = self.strct.name().to_string();
         let type_params = self.strct_type_param_names();
@@ -1717,7 +1775,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                         _ => { fields: $(self.gen_fields_if_name_with_params(&ExtendsOrWraps::None, &ExtendsOrWraps::None)), }
                     })
                 ) {
-                    this.$$fullTypeName = $compose_sui_type(
+                    this.$$fullTypeName = $compose_iota_type(
                             $(&struct_name).$$typeName,
                             ...typeArgs
                     ) as $static_full_type_name_as_toks;
@@ -1741,7 +1799,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                 ) {
                     return {
                         typeName: $(&struct_name).$$typeName,
-                        fullTypeName: $compose_sui_type(
+                        fullTypeName: $compose_iota_type(
                             $(&struct_name).$$typeName,
                             ...[$(for param in &type_params join (, ) => $extract_type($param))]
                         ) as $reified_full_type_name_as_toks,
@@ -1798,8 +1856,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                                 })
                                 json,
                             ),
-                        fromSuiParsedData: (content: $sui_parsed_data) =>
-                            $(&struct_name).fromSuiParsedData(
+                        fromIotaParsedData: (content: $iota_parsed_data) =>
+                            $(&struct_name).fromIotaParsedData(
                                 $(match type_params.len() {
                                     0 => (),
                                     1 => { $(type_params[0].clone()), },
@@ -1807,8 +1865,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                                 })
                                 content,
                             ),
-                        fromSuiObjectData: (content: $sui_object_data) =>
-                            $(&struct_name).fromSuiObjectData(
+                        fromIotaObjectData: (content: $iota_object_data) =>
+                            $(&struct_name).fromIotaObjectData(
                                 $(match type_params.len() {
                                     0 => (),
                                     1 => { $(type_params[0].clone()), },
@@ -1816,7 +1874,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                                 })
                                 content,
                             ),
-                        fetch: async (client: $sui_client, id: string) => $(&struct_name).fetch(
+                        fetch: async (client: $iota_client, id: string) => $(&struct_name).fetch(
                             client,
                             $(match type_params.len() {
                                 0 => (),
@@ -1978,9 +2036,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                                 );
 
                                 match &field.type_ {
-                                    Type::Datatype(id_tys) => {
-                                        let (id, _ts) = &**id_tys;
-                                        let ((pid, mid), sid) = *id;
+                                    Type::Datatype(id) => {
+                                        let ((pid, mid), sid) = *id.clone();
                                         let field_module = self.strct.model().module((pid, mid));
                                         let field_strct = todo_panic_if_enum(&field_module, sid);
 
@@ -2071,7 +2128,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                     };
                     $(if !type_params.is_empty() {
                         $assert_reified_type_args_match(
-                            $compose_sui_type($(&struct_name).$$typeName,
+                            $compose_iota_type($(&struct_name).$$typeName,
                             $(match type_params.len() {
                                 1 => { $extract_type(typeArg) },
                                 _ => { ...typeArgs.map($extract_type) },
@@ -2094,8 +2151,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                     )
                 }$['\n']
 
-                static fromSuiParsedData$(params_toks_for_reified)(
-                    $type_args_param_if_any content: $sui_parsed_data
+                static fromIotaParsedData$(params_toks_for_reified)(
+                    $type_args_param_if_any content: $iota_parsed_data
                 ): $(&struct_name)$(params_toks_for_to_type_argument) {
                     if (content.dataType !== "moveObject") {
                         throw new Error("not an object");
@@ -2115,8 +2172,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                     );
                 }$['\n']
 
-                static fromSuiObjectData$(params_toks_for_reified)(
-                    $type_args_param_if_any data: $sui_object_data
+                static fromIotaObjectData$(params_toks_for_reified)(
+                    $type_args_param_if_any data: $iota_object_data
                 ): $(&struct_name)$(params_toks_for_to_type_argument) {
                     if (data.bcs) {
                         if (data.bcs.dataType !== "moveObject" || !is$(&struct_name)(data.bcs.type)) {
@@ -2133,9 +2190,9 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                                         "type argument mismatch: expected 1 type argument but got '${gotTypeArgs.length}'".to_string()
                                     )));
                                 };
-                                const gotTypeArg = $compress_sui_type(gotTypeArgs[0]);
-                                const expectedTypeArg = $compress_sui_type($extract_type(typeArg));
-                                if (gotTypeArg !== $compress_sui_type($extract_type(typeArg))) {
+                                const gotTypeArg = $compress_iota_type(gotTypeArgs[0]);
+                                const expectedTypeArg = $compress_iota_type($extract_type(typeArg));
+                                if (gotTypeArg !== $compress_iota_type($extract_type(typeArg))) {
                                     throw new Error($(self.interpolate(
                                         "type argument mismatch: expected '${expectedTypeArg}' but got '${gotTypeArg}'".to_string()
                                     )));
@@ -2149,8 +2206,8 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                                     )));
                                 };
                                 for (let i = 0; i < $n; i++) {
-                                    const gotTypeArg = $compress_sui_type(gotTypeArgs[i]);
-                                    const expectedTypeArg = $compress_sui_type($extract_type(typeArgs[i]));
+                                    const gotTypeArg = $compress_iota_type(gotTypeArgs[i]);
+                                    const expectedTypeArg = $compress_iota_type($extract_type(typeArgs[i]));
                                     if (gotTypeArg !== expectedTypeArg) {
                                         throw new Error($(self.interpolate(
                                             "type argument mismatch at position ${i}: expected '${expectedTypeArg}' but got '${gotTypeArg}'".to_string()
@@ -2170,7 +2227,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                         );
                     }
                     if (data.content) {
-                        return $(&struct_name).fromSuiParsedData(
+                        return $(&struct_name).fromIotaParsedData(
                             $(match type_params.len() {
                                 0 => (),
                                 1 => { typeArg, },
@@ -2186,7 +2243,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                 }$['\n']
 
                 static async fetch$(params_toks_for_reified)(
-                    client: $sui_client, $type_args_param_if_any id: string
+                    client: $iota_client, $type_args_param_if_any id: string
                 ): Promise<$(&struct_name)$(params_toks_for_to_type_argument)> {
                     const res = await client.getObject({
                         id,
@@ -2205,7 +2262,7 @@ impl<'a, 'model, const HAS_SOURCE: SourceKind> StructsGen<'a, 'model, HAS_SOURCE
                         ));
                     }$['\n']
 
-                    return $(&struct_name).fromSuiObjectData(
+                    return $(&struct_name).fromIotaObjectData(
                         $(match type_params.len() {
                             0 => (),
                             1 => { typeArg, },

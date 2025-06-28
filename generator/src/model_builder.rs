@@ -8,7 +8,7 @@ use futures::future;
 use move_binary_format::file_format::CompiledModule;
 use move_compiler::editions as ME;
 use move_core_types::account_address::AccountAddress;
-use move_model_2::model::{self, Model};
+use move_model_2::source_model::Model;
 use move_package::compilation::model_builder;
 use move_package::resolution::resolution_graph::ResolvedGraph;
 use move_package::source_package::parsed_manifest as PM;
@@ -17,13 +17,13 @@ use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
-use sui_json_rpc_types::SuiRawMovePackage;
-use sui_move_build::gather_published_ids;
-use sui_sdk::types::base_types::SequenceNumber;
-use sui_sdk::types::move_package::UpgradeInfo;
+use iota_json_rpc_types::IotaRawMovePackage;
+use iota_move_build::gather_published_ids;
+use iota_sdk::types::base_types::SequenceNumber;
+use iota_sdk::types::move_package::UpgradeInfo;
 use tempfile::tempdir;
 
-const STUB_PACKAGE_NAME: &str = "SuiClientGenRootPackageStub";
+const STUB_PACKAGE_NAME: &str = "IotaClientGenRootPackageStub";
 
 /// Wrapper struct to display a package as an inline table in the stub Move.toml.
 /// This is necessary becase the `toml` crate does not currently support serializing
@@ -34,12 +34,12 @@ struct SubstTOML<'a>(&'a PM::Substitution);
 pub type TypeOriginTable = BTreeMap<AccountAddress, BTreeMap<String, AccountAddress>>;
 pub type VersionTable = BTreeMap<AccountAddress, BTreeMap<AccountAddress, SequenceNumber>>;
 
-pub type SourceModelResult = ModelResult<{ model::WITH_SOURCE }>;
-pub type OnChainModelResult = ModelResult<{ model::WITHOUT_SOURCE }>;
+pub type SourceModelResult = ModelResult;
+pub type OnChainModelResult = ModelResult;
 
-pub struct ModelResult<const HAS_SOURCE: usize> {
+pub struct ModelResult {
     /// Move model for packages defined in gen.toml
-    pub env: Model<HAS_SOURCE>,
+    pub env: Model,
     /// Map from id to package name
     pub id_map: BTreeMap<AccountAddress, PM::PackageName>,
     /// Map from original package ID to the published at ID
@@ -137,7 +137,7 @@ async fn build_source_model<Progress: Write>(
     // TODO: allow some of these options to be passed in as flags
     let build_config = MoveBuildConfig {
         skip_fetch_latest_git_deps: true,
-        default_flavor: Some(ME::Flavor::Sui),
+        default_flavor: Some(ME::Flavor::Iota),
         ..Default::default()
     };
     let resolved_graph =
@@ -192,7 +192,7 @@ async fn build_on_chain_model<Progress: Write>(
     let raw_pkgs = cache.get_multi(pkg_ids).await?;
     for pkg in raw_pkgs {
         let pkg = pkg?;
-        let SuiRawMovePackage { module_map, .. } = pkg;
+        let IotaRawMovePackage { module_map, .. } = pkg;
         for (_, bytes) in module_map {
             let module = CompiledModule::deserialize_with_defaults(&bytes)?;
             modules.push(module)
@@ -208,7 +208,42 @@ async fn build_on_chain_model<Progress: Write>(
         on_chain_published_at.insert(*original_id, pkg.id);
     }
 
-    let env = Model::from_compiled(&on_chain_id_map, modules);
+    // For on-chain modules, we need to use a different approach
+    // The model_builder::build function expects a ResolvedGraph from source packages
+    // For compiled modules, we should use the Model's bytecode loading capabilities
+    
+    // Create a temporary directory structure to load compiled modules
+    let temp_dir = tempdir()?;
+    let modules_path = temp_dir.path().join("modules");
+    fs::create_dir(&modules_path)?;
+    
+    // Write compiled modules to temporary files
+    for (idx, module) in modules.iter().enumerate() {
+        let mut module_bytes = Vec::new();
+        module.serialize_with_version(module.version, &mut module_bytes)?;
+        let module_file = modules_path.join(format!("module_{}.mv", idx));
+        fs::write(&module_file, module_bytes)?;
+    }
+    
+    // Create a minimal package structure for loading
+    let mut stub_manifest = File::create(temp_dir.path().join("Move.toml"))?;
+    writeln!(stub_manifest, "[package]")?;
+    writeln!(stub_manifest, "name = \"OnChainPackages\"")?;
+    writeln!(stub_manifest, "version = \"0.1.0\"")?;
+    
+    // Build configuration for loading compiled modules
+    let build_config = MoveBuildConfig {
+        skip_fetch_latest_git_deps: true,
+        default_flavor: Some(ME::Flavor::Iota),
+        ..Default::default()
+    };
+    
+    // Create a resolved graph from the temporary package
+    let resolved_graph = build_config.resolution_graph_for_package(temp_dir.path(), None, &mut io::stderr())?;
+    
+    // Build the model using the standard model_builder
+    let mut stderr = StandardStream::stderr(ColorChoice::Always);
+    let env = model_builder::build(resolved_graph, &mut stderr)?;
 
     // resolve type origins
     let type_origin_table = resolve_type_origin_table(
@@ -391,11 +426,11 @@ async fn resolve_original_package_id(
     Ok(id)
 }
 
-async fn resolve_type_origin_table<Progress: Write, const HAS_SOURCE: usize>(
+async fn resolve_type_origin_table<Progress: Write>(
     cache: &mut PackageCache<'_>,
     id_map: &BTreeMap<AccountAddress, PM::PackageName>,
     published_at: &BTreeMap<AccountAddress, AccountAddress>,
-    model: &Model<HAS_SOURCE>,
+    model: &Model,
     progress_output: &mut Progress,
 ) -> Result<TypeOriginTable> {
     let mut type_origin_table = BTreeMap::new();

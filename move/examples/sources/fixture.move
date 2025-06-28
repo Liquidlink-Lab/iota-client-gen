@@ -3,12 +3,12 @@ module examples::fixture {
     use std::string;
     use std::option::Option;
 
-    use sui::object::{Self, ID, UID};
-    use sui::url::Url;
-    use sui::balance::Balance;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use sui::sui::SUI;
+    use iota::object::{Self, ID, UID};
+    use iota::url::Url;
+    use iota::balance::Balance;
+    use iota::transfer;
+    use iota::tx_context::{Self, TxContext};
+    use iota::iota::IOTA;
 
     use examples::other_module::{Self, StructFromOtherModule};
 
@@ -54,7 +54,7 @@ module examples::fixture {
         url: Url,
         id_field: ID,
         uid: UID,
-        balance: Balance<SUI>,
+        balance: Balance<IOTA>,
         option: Option<u64>,
         option_obj: Option<Bar>,
         option_none: Option<u64>,
@@ -149,7 +149,7 @@ module examples::fixture {
         url: Url,
         id_field: ID,
         uid: UID,
-        balance: Balance<SUI>,
+        balance: Balance<IOTA>,
         option: Option<u64>,
         option_obj: Option<Bar>,
         option_none: Option<u64>,

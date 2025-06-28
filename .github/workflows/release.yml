@@ -55,7 +55,7 @@ jobs:
         id: build
         run: |
           cargo build --release
-          echo BIN="target/release/sui-client-gen" >> $GITHUB_OUTPUT
+          echo BIN="target/release/iota-client-gen" >> $GITHUB_OUTPUT
       - name: Upload release artifacts
         if: ${{ env.version_tag != 'main' }}
         uses: actions/upload-artifact@v3
