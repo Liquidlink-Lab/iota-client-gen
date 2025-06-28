@@ -12,7 +12,8 @@ use move_package::compilation::model_builder;
 use move_package::resolution::resolution_graph::ResolvedGraph;
 use move_package::source_package::parsed_manifest as PM;
 use move_package::BuildConfig as MoveBuildConfig;
-use move_binary_format::file_format::CompiledModule;
+use move_binary_format::file_format::{CompiledModule, Visibility, AbilitySet, Ability};
+use move_binary_format::normalized::{Module as NormalizedModule, Type as NormalizedType};
 use std::collections::{BTreeMap, HashSet, VecDeque};
 use std::fs::{self, File};
 use std::io::{self, Write};
@@ -26,9 +27,8 @@ use tempfile::tempdir;
 const STUB_PACKAGE_NAME: &str = "IotaClientGenRootPackageStub";
 
 /// Generate a minimal Move source file from a compiled module
-/// This creates native function declarations that match the module's interface
+/// This creates native function declarations and struct definitions that match the module's interface
 fn generate_source_stub(module: &CompiledModule) -> String {
-    use move_binary_format::file_format::Visibility;
     
     let mut source = String::new();
     
@@ -44,25 +44,162 @@ fn generate_source_stub(module: &CompiledModule) -> String {
     };
     source.push_str(&format!("module {}::{} {{\n", addr_str, name));
     
-    // For now, just create a simple module with native functions
-    // We'll skip struct declarations as they're complex to reconstruct
+    // Add use statements for common types
+    if name.as_str() != "object" && name.as_str() != "tx_context" {
+        source.push_str("    use 0x2::object::{Self, ID};\n");
+        source.push_str("    use 0x2::tx_context::TxContext;\n");
+    }
     
-    // Add native function declarations for all public functions
-    for func_def in module.function_defs() {
-        match &func_def.visibility {
-            Visibility::Public | Visibility::Friend => {
-                let func_handle = module.function_handle_at(func_def.function);
-                let name = module.identifier_at(func_handle.name);
-                
-                // Create a native function declaration
-                source.push_str(&format!("    native public fun {}();\n", name));
+    // Add struct definitions
+    let normalized = NormalizedModule::new(module);
+    for (struct_name, struct_def) in &normalized.structs {
+        source.push_str(&format!("\n    struct {}", struct_name));
+        
+        // Add type parameters if any
+        if !struct_def.type_parameters.is_empty() {
+            source.push_str("<");
+            for (i, type_param) in struct_def.type_parameters.iter().enumerate() {
+                if i > 0 {
+                    source.push_str(", ");
+                }
+                if type_param.is_phantom {
+                    source.push_str("phantom ");
+                }
+                source.push_str(&format!("T{}", i));
             }
-            _ => {}
+            source.push_str(">");
         }
+        
+        // Add abilities
+        let abilities = format_abilities(&struct_def.abilities);
+        if !abilities.is_empty() {
+            source.push_str(&format!(" has {}", abilities));
+        }
+        
+        source.push_str(" {\n");
+        
+        // Add fields - the fields are a Vec<Field> not a map
+        for field in &struct_def.fields {
+            source.push_str(&format!("        {}: {},\n", field.name, format_type(&field.type_)));
+        }
+        
+        source.push_str("    }\n");
+    }
+    
+    // Add function declarations
+    source.push_str("\n");
+    for (func_name, func_def) in &normalized.functions {
+        // Skip private functions
+        match func_def.visibility {
+            Visibility::Public | Visibility::Friend => {},
+            _ => continue,
+        }
+        
+        // Add native keyword
+        source.push_str("    native public ");
+        
+        // Add entry modifier if applicable
+        if func_def.is_entry {
+            source.push_str("entry ");
+        }
+        
+        source.push_str(&format!("fun {}", func_name));
+        
+        // Add type parameters
+        if !func_def.type_parameters.is_empty() {
+            source.push_str("<");
+            for (i, _) in func_def.type_parameters.iter().enumerate() {
+                if i > 0 {
+                    source.push_str(", ");
+                }
+                source.push_str(&format!("T{}", i));
+            }
+            source.push_str(">");
+        }
+        
+        source.push_str("(");
+        
+        // Add parameters
+        for (i, param_type) in func_def.parameters.iter().enumerate() {
+            if i > 0 {
+                source.push_str(", ");
+            }
+            source.push_str(&format!("a{}: {}", i, format_type(param_type)));
+        }
+        
+        source.push_str(")");
+        
+        // Add return type if not unit
+        if !func_def.return_.is_empty() {
+            source.push_str(": ");
+            if func_def.return_.len() == 1 {
+                source.push_str(&format_type(&func_def.return_[0]));
+            } else {
+                source.push_str("(");
+                for (i, ret_type) in func_def.return_.iter().enumerate() {
+                    if i > 0 {
+                        source.push_str(", ");
+                    }
+                    source.push_str(&format_type(ret_type));
+                }
+                source.push_str(")");
+            }
+        }
+        
+        source.push_str(";\n");
     }
     
     source.push_str("}\n");
     source
+}
+
+fn format_abilities(abilities: &AbilitySet) -> String {
+    let mut ability_strs = vec![];
+    if abilities.has_ability(Ability::Copy) {
+        ability_strs.push("copy");
+    }
+    if abilities.has_ability(Ability::Drop) {
+        ability_strs.push("drop");
+    }
+    if abilities.has_ability(Ability::Store) {
+        ability_strs.push("store");
+    }
+    if abilities.has_ability(Ability::Key) {
+        ability_strs.push("key");
+    }
+    ability_strs.join(", ")
+}
+
+fn format_type(ty: &NormalizedType) -> String {
+    use move_binary_format::normalized::Type as NT;
+    match ty {
+        NT::Bool => "bool".to_string(),
+        NT::U8 => "u8".to_string(),
+        NT::U16 => "u16".to_string(),
+        NT::U32 => "u32".to_string(),
+        NT::U64 => "u64".to_string(),
+        NT::U128 => "u128".to_string(),
+        NT::U256 => "u256".to_string(),
+        NT::Address => "address".to_string(),
+        NT::Signer => "signer".to_string(),
+        NT::Struct { address, module, name, type_arguments } => {
+            let base = format!("0x{}::{}::{}", address, module, name);
+            if type_arguments.is_empty() {
+                base
+            } else {
+                format!("{}<{}>", base, 
+                    type_arguments.iter()
+                        .map(format_type)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        },
+        NT::Vector(inner) => format!("vector<{}>", format_type(inner)),
+        NT::TypeParameter(idx) => format!("T{}", idx),
+        NT::Reference(inner) => format!("&{}", format_type(inner)),
+        NT::MutableReference(inner) => format!("&mut {}", format_type(inner)),
+    }
 }
 
 /// Wrapper struct to display a package as an inline table in the stub Move.toml.
