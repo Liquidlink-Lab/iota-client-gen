@@ -1,31 +1,47 @@
 # iota-client-gen
 
-A tool for generating TS SDKs for IOTA Move smart contracts. Supports code generation both for source code and on-chain packages with no IDLs or ABIs required.
+A tool for generating TypeScript SDKs for IOTA Move smart contracts. Supports code generation for both source code and on-chain packages with no IDLs or ABIs required.
+
+> **Note**: This is a fork of [sui-client-gen](https://github.com/kunalabs-io/sui-client-gen) adapted for the IOTA blockchain.
+
+## Features
+
+- **No ABIs Required**: Generates TypeScript bindings directly from Move bytecode
+- **Full Type Safety**: Complete type inference including generic types
+- **On-chain Package Support**: Works with deployed packages without source code
+- **Automatic Dependency Resolution**: Handles framework and custom dependencies
 
 ## Quick Start
 
 1. Install the generator by either:
 
-   - `cargo install --locked --git https://github.com/3MateLabs/iota-client-gen.git` (you might have to install some [build dependencies](https://docs.iota.org/guides/developer/getting-started/iota-install#all-linux-prerequisites))
-   - or downloading a binary from https://github.com/3MateLabs/iota-client-gen/releases/
+   - `cargo install --locked --git https://github.com/iotaledger/iota-client-gen.git` (you might have to install some [build dependencies](https://docs.iota.org/developer/getting-started/iota-install))
+   - Building from source: `cd generator && cargo install --path .`
+   - Or downloading a binary from releases (when available)
 
 2. Create a new directory and in it a `gen.toml` file like so:
 
 ```toml
 [config]
-# will be set to mainnet by default if omitted
-rpc = "https://api.devnet.iota.org"
+# IOTA RPC endpoint (defaults to mainnet if omitted)
+rpc = "https://api.testnet.iota.cafe"  # or "https://api.mainnet.iota.cafe" for mainnet
 
 [packages]
-# based on source code (syntax same as in Move.toml):
-DeepBook = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/deepbook", rev = "releases/iota-v1.0.0-release" }
-AMM = { local = "../move/amm" }
-# an on-chain package:
-FooPackage = { id = "0x12345" }
+# On-chain packages (most common use case):
+MyPackage = { id = "0x661937ee7f999fc4040464bd3de66ba413c2644d3970b7027dece7773f2663bf" }
+
+# Source code packages (same syntax as Move.toml):
+DeepBook = { git = "https://github.com/iotaledger/iota.git", subdir = "crates/iota-framework/packages/deepbook", rev = "develop" }
+LocalPackage = { local = "../move/my-package" }
 ```
 
 3. Run the generator from inside the directory: `iota-client-gen`
-4. Run the linter / formatter on the generated code: `pnpm eslint . --fix`
+4. (Optional) Run the linter/formatter on the generated code: `pnpm eslint . --fix`
+
+The generator will create:
+- `_framework/` - Core framework utilities
+- `_dependencies/` - Dependencies from IOTA framework (0x1, 0x2)
+- Your package folders with `functions.ts` and `structs.ts` files
 
 ## Usage Examples
 
@@ -84,7 +100,7 @@ const res = await client.getObject({
   id: POOL_ID,
   options: { showContent: true },
 });
-const pool = poolReified.fromSuiParsedData(res.data.content);
+const pool = poolReified.fromIotaParsedData(res.data.content);
 
 console.log(pool);
 ```
@@ -226,14 +242,70 @@ specialTypes(tx, {
 });
 ```
 
-## Caveats
+## IOTA-Specific Features
 
-- When specifying both source and on-chain packages, the generator will currently generate two separate dependency graphs (one for on-chain and one for source). This is due to a technical detail and will be resolved in a future version so that only a single dependency graph is generated (https://github.com/3MateLabs/iota-client-gen/issues/1#issuecomment-1554754842).
-- Since whitespace detection relies on some Rust nightly features which are currently unstable (https://github.com/udoprog/genco/issues/39#issuecomment-1569076737), the generated code is not formatted nicely. Usage of formatters on the generated code (e.g., `prettier`, `eslint`) is recommended.
+This fork includes enhancements for working with IOTA blockchain:
+
+- **Bytecode-only Support**: Can generate bindings from on-chain packages without source code
+- **Automatic Source Stub Generation**: Creates Move source stubs from bytecode for the build system
+- **IOTA SDK Integration**: Uses `@iota/iota-sdk` instead of `@mysten/sui`
+- **Framework Module Support**: Includes IOTA-specific modules like `coin_manager`, `labeler`, `timelock`
+
+## Known Limitations
+
+### Parameter Names
+When generating from on-chain packages (bytecode only), parameter names are generic (`a0`, `a1`, etc.) instead of descriptive names. This is because the original parameter names are not preserved in bytecode.
+
+```typescript
+// Generated from bytecode
+export interface AddCoinArgs { 
+  a0: TransactionObjectInput;  // Actually the vault
+  a1: TransactionObjectInput;  // Actually the coin
+}
+
+// Would be with source code
+export interface AddCoinArgs { 
+  vault: TransactionObjectInput; 
+  coin: TransactionObjectInput;
+}
+```
+
+### Other Caveats
+
+- When specifying both source and on-chain packages, the generator will currently generate two separate dependency graphs (one for on-chain and one for source).
+- Since whitespace detection relies on some Rust nightly features which are currently unstable, the generated code is not formatted nicely. Usage of formatters on the generated code (e.g., `prettier`, `eslint`) is recommended.
 - Because ESLint renames some types (e.g., `String` -> `string`) due to the `@typescript-eslint/ban-types` rule which breaks the generated code, an `.eslintrc.json` file is generated in the root directory to turn off this rule.
 - When re-running the generator, the files generated on previous run will _not_ be automatically deleted in order to avoid accidental data wipes. The old files can either be deleted manually before re-running the tool (it's safe to delete everything aside from `gen.toml`) or by running the generator with `--clean` (use with caution).
 
+## Building from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/iotaledger/iota-client-gen.git
+cd iota-client-gen
+
+# Build the project
+cd generator
+cargo build --release
+
+# Install locally
+cargo install --path .
+
+# Run tests
+cargo test
+```
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Development
+
+- The main logic is in `generator/src/`
+- Tests are minimal but passing - contributions to improve test coverage are especially welcome
+- See [TEST_ANALYSIS_AND_PLAN.md](./TEST_ANALYSIS_AND_PLAN.md) for testing roadmap
+
 ## Docs
 
-For more detailed usage documentation, check out the [docs](https://github.com/3MateLabs/iota-client-gen/blob/master/DOC.md).
-For technical details on the internals and reasoning behind the design decisions, check out the [design doc](https://github.com/3MateLabs/iota-client-gen/issues/1).
+For more detailed usage documentation, check out the [docs](https://github.com/iotaledger/iota-client-gen/blob/master/DOC.md).
+For technical details on the internals and reasoning behind the design decisions, check out the original [design doc](https://github.com/kunalabs-io/sui-client-gen/issues/1).
