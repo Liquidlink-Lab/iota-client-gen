@@ -281,7 +281,7 @@ export interface AddCoinArgs {
 
 ```bash
 # Clone the repository
-git clone https://github.com/iotaledger/iota-client-gen.git
+git clone https://github.com/EasonC13/iota-client-gen.git
 cd iota-client-gen
 
 # Build the project
